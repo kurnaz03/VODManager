@@ -1,0 +1,149 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+  --vm-primary: #3B82F6;
+  --vm-primary-soft: rgba(59, 130, 246, 0.12);
+  --vm-sidebar: #0F172A;
+  --vm-accent: #14B8A6;
+}
+
+html {
+  background: #f0f2f5;
+}
+
+body {
+  margin: 0;
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(180deg, #f8f9fa 0%, #eef2f7 100%);
+  color: #1f2937;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+@layer base {
+  * {
+    @apply border-slate-200;
+  }
+
+  ::selection {
+    @apply bg-blue-100 text-blue-900;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)];
+  }
+
+  .icon-chip {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100;
+  }
+
+  .icon-chip-green {
+    @apply bg-emerald-50 text-emerald-600 ring-emerald-100;
+  }
+
+  .icon-chip-amber {
+    @apply bg-amber-50 text-amber-600 ring-amber-100;
+  }
+
+  .icon-chip-red {
+    @apply bg-rose-50 text-rose-600 ring-rose-100;
+  }
+
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60;
+    background: var(--vm-primary);
+    box-shadow: 0 14px 28px color-mix(in srgb, var(--vm-primary) 28%, transparent);
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50;
+  }
+
+  .success-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60;
+    background: var(--vm-accent);
+    box-shadow: 0 14px 28px color-mix(in srgb, var(--vm-accent) 24%, transparent);
+  }
+
+  .danger-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(244,63,94,0.16)] transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .panel-label {
+    @apply mb-2 block text-sm font-medium text-slate-700;
+  }
+
+  .panel-input {
+    @apply h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-slate-800 outline-none transition placeholder:text-slate-400;
+  }
+
+  .panel-textarea {
+    @apply min-h-[112px] w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none transition placeholder:text-slate-400;
+  }
+
+  .panel-select {
+    @apply h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-slate-800 outline-none transition;
+  }
+
+  .panel-error {
+    @apply mt-1 text-xs text-rose-500;
+  }
+
+  .table-shell {
+    @apply overflow-hidden rounded-[24px] border border-slate-200 bg-white;
+  }
+
+  .table-head {
+    @apply bg-slate-50 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500;
+  }
+
+  .table-row {
+    @apply transition hover:bg-blue-50/50;
+  }
+
+  .table-zebra {
+    @apply even:bg-slate-50/80;
+  }
+}
+
+button.primary-button:hover,
+button.success-button:hover {
+  filter: brightness(0.94);
+}
+
+.panel-input:focus,
+.panel-textarea:focus,
+.panel-select:focus {
+  border-color: var(--vm-primary);
+  box-shadow: 0 0 0 4px var(--vm-primary-soft);
+}
+
+.vm-accent-text {
+  color: var(--vm-accent);
+}
+
+.vm-primary-text {
+  color: var(--vm-primary);
+}

@@ -1,0 +1,216 @@
+import os
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from sqlalchemy.orm import Session, joinedload
+
+from app.core.database import get_db
+from app.modules.content.models import (
+    Bouquet,
+    BouquetItem,
+    BouquetItemType,
+    MovieContent,
+    SeriesContent,
+    SeriesEpisode,
+    SeriesSeason,
+    TvContent,
+)
+from app.modules.iptv_users.models import IptvUser, UserBouquet
+from app.modules.playlist.models import Playlist
+
+router = APIRouter()
+
+SERVER_HOST = "62.210.92.252"
+SERVER_PORT = 8080
+HLS_BASE_DIR = "/var/www/vod-manager/shared/hls"
+
+
+def _auth_iptv_user(db: Session, username: str, password: str) -> IptvUser:
+    user = (
+        db.query(IptvUser)
+        .options(joinedload(IptvUser.bouquets))
+        .filter(IptvUser.username == username, IptvUser.password == password)
+        .first()
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Gecersiz kimlik")
+    if not user.is_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Hesap pasif")
+    if user.expiry_date:
+        exp = user.expiry_date
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < datetime.now(timezone.utc):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Suresi dolmus")
+    return user
+
+
+def _check_item_access(db: Session, user: IptvUser, item_type: str, item_id: int) -> bool:
+    bouquet_ids = [ub.bouquet_id for ub in (user.bouquets or [])]
+    if not bouquet_ids:
+        return False
+    try:
+        it = BouquetItemType(item_type)
+    except ValueError:
+        return False
+    exists = (
+        db.query(BouquetItem)
+        .filter(
+            BouquetItem.bouquet_id.in_(bouquet_ids),
+            BouquetItem.item_type == it,
+            BouquetItem.item_id == item_id,
+        )
+        .first()
+    )
+    return exists is not None
+
+
+@router.get("/get.php", response_class=PlainTextResponse, tags=["stream"])
+def get_m3u_plus(
+    username: str = Query(...),
+    password: str = Query(...),
+    type: str = Query("m3u_plus"),
+    output: str = Query("mpegts"),
+    db: Session = Depends(get_db),
+):
+    user = _auth_iptv_user(db, username, password)
+    base = f"http://{SERVER_HOST}:{SERVER_PORT}"
+    lines = ["#EXTM3U"]
+
+    for ub in (user.bouquets or []):
+        bouquet = (
+            db.query(Bouquet)
+            .options(joinedload(Bouquet.items))
+            .filter(Bouquet.id == ub.bouquet_id)
+            .first()
+        )
+        if not bouquet or not bouquet.is_active:
+            continue
+
+        items = sorted(bouquet.items, key=lambda x: (x.position, x.id))
+        for item in items:
+            item_type = item.item_type.value if hasattr(item.item_type, "value") else str(item.item_type)
+
+            from app.modules.content.service import _get_item_metadata
+            title, logo = _get_item_metadata(db, item_type, item.item_id)
+            title = title or f"Item {item.item_id}"
+            logo = logo or ""
+
+            if item_type == "tv":
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
+            elif item_type == "movie":
+                stream_url = f"{base}/movie/{username}/{password}/{item.item_id}.mp4"
+            elif item_type == "series":
+                stream_url = f"{base}/series/{username}/{password}/{item.item_id}.mp4"
+            elif item_type == "vod_channel":
+                # VOD Channel (playlist) is a continuous HLS stream — treat like live
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
+            else:
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
+
+            extinf = (
+                f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+            )
+            lines.append(extinf)
+            lines.append(stream_url)
+
+    return "\n".join(lines) + "\n"
+
+
+@router.get("/live/{username}/{password}/{item_id}.ts", tags=["stream"])
+def serve_live(username: str, password: str, item_id: int, db: Session = Depends(get_db)):
+    user = _auth_iptv_user(db, username, password)
+
+    # Check if this is a VOD Channel (playlist) item first
+    if _check_item_access(db, user, "vod_channel", item_id):
+        playlist = db.query(Playlist).filter(Playlist.id == item_id).first()
+        if playlist is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist bulunamadi")
+        # Redirect to HLS stream
+        hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
+        if os.path.isfile(hls_path):
+            base_url = f"http://{SERVER_HOST}:{SERVER_PORT}/hls/{playlist.id}"
+            with open(hls_path, "r") as fh:
+                content = fh.read()
+            out_lines = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    out_lines.append(f"{base_url}/{stripped}")
+                else:
+                    out_lines.append(line)
+            rewritten = chr(10).join(out_lines) + chr(10)
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(content=rewritten, media_type="application/vnd.apple.mpegurl")
+        if playlist.stream_url:
+            return RedirectResponse(url=playlist.stream_url, status_code=302)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD Channel stream bulunamadi")
+
+    # Normal TV channel
+    if not _check_item_access(db, user, "tv", item_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Erisim yok")
+    tv = db.query(TvContent).filter(TvContent.id == item_id).first()
+    if tv is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kanal bulunamadi")
+    if tv.stream_url:
+        return RedirectResponse(url=tv.stream_url, status_code=302)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stream bulunamadi")
+
+
+
+
+@router.get("/hls/{playlist_id}/{segment}", tags=["stream"])
+def serve_hls_segment(playlist_id: int, segment: str):
+    if "/" in segment or ".." in segment:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gecersiz segment adi")
+    segment_path = f"{HLS_BASE_DIR}/{playlist_id}/{segment}"
+    if not os.path.isfile(segment_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment bulunamadi")
+    if segment.endswith(".m3u8"):
+        return FileResponse(segment_path, media_type="application/vnd.apple.mpegurl")
+    return FileResponse(segment_path, media_type="video/MP2T")
+
+@router.get("/movie/{username}/{password}/{item_id}.mp4", tags=["stream"])
+def serve_movie(username: str, password: str, item_id: int, db: Session = Depends(get_db)):
+    user = _auth_iptv_user(db, username, password)
+    if not _check_item_access(db, user, "movie", item_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Erisim yok")
+    movie = db.query(MovieContent).filter(MovieContent.id == item_id).first()
+    if movie is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Film bulunamadi")
+    if movie.file_path and os.path.isfile(movie.file_path):
+        return FileResponse(movie.file_path, media_type="video/mp4", filename=f"{movie.title}.mp4")
+    if movie.source_url:
+        return RedirectResponse(url=movie.source_url, status_code=302)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Film dosyasi bulunamadi")
+
+
+@router.get("/series/{username}/{password}/{item_id}.mp4", tags=["stream"])
+def serve_series(username: str, password: str, item_id: int, db: Session = Depends(get_db)):
+    user = _auth_iptv_user(db, username, password)
+    if not _check_item_access(db, user, "series", item_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Erisim yok")
+    series = db.query(SeriesContent).filter(SeriesContent.id == item_id).first()
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi bulunamadi")
+    first_season = (
+        db.query(SeriesSeason)
+        .filter(SeriesSeason.series_id == item_id)
+        .order_by(SeriesSeason.season_number.asc())
+        .first()
+    )
+    if first_season:
+        first_ep = (
+            db.query(SeriesEpisode)
+            .filter(SeriesEpisode.season_id == first_season.id)
+            .order_by(SeriesEpisode.episode_number.asc())
+            .first()
+        )
+        if first_ep:
+            if first_ep.file_path and os.path.isfile(first_ep.file_path):
+                return FileResponse(first_ep.file_path, media_type="video/mp4")
+            if first_ep.source_url:
+                return RedirectResponse(url=first_ep.source_url, status_code=302)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi dosyasi bulunamadi")

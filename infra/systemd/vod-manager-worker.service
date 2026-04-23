@@ -1,0 +1,20 @@
+﻿[Unit]
+Description=VOD Manager Celery Worker + Beat
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=exec
+User=root
+Group=root
+WorkingDirectory=/var/www/vod-manager/app/backend
+Environment=PATH=/var/www/vod-manager/venv/bin:/usr/bin:/bin
+EnvironmentFile=/var/www/vod-manager/shared/env/backend.env
+ExecStart=/var/www/vod-manager/venv/bin/celery -A app.core.celery_app worker --beat --loglevel=info --concurrency=2 -n worker@%%h
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/www/vod-manager/shared/logs/worker.log
+StandardError=append:/var/www/vod-manager/shared/logs/worker-error.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+﻿[Unit]
+Description=VOD Manager API (FastAPI)
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/vod-manager/app/backend
+Environment="PATH=/var/www/vod-manager/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/var/www/vod-manager/shared/env/backend.env
+ExecStart=/var/www/vod-manager/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --log-level info --access-log
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/www/vod-manager/shared/logs/api.log
+StandardError=append:/var/www/vod-manager/shared/logs/api-error.log
+
+[Install]
+WantedBy=multi-user.target

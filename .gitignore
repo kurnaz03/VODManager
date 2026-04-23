@@ -1,0 +1,54 @@
+﻿# Node
+node_modules/
+dist/
+frontend-dist/
+frontend/.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+build/
+venv/
+.venv/
+env/
+
+# Environment / secrets
+.env
+backend.env
+backend/.env
+*.env
+
+# Database
+*.db
+*.sqlite3
+
+# Shared storage
+shared/
+
+# Logs
+*.log
+
+# Archives
+*.tar.gz
+*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Celery schedule
+backend/celerybeat-schedule
+backend/celerybeat.pid
+
+# Docker volumes
+pg_data/

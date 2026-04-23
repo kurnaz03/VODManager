@@ -1,0 +1,453 @@
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  Cpu,
+  Crown,
+  Film,
+  HardDrive,
+  Layers3,
+  MemoryStick,
+  ServerCog,
+  Users,
+  Wifi,
+} from 'lucide-react'
+import StatusBadge from '../../components/ui/StatusBadge'
+import MetricBar from '../../components/ui/MetricBar'
+import api from '../../utils/api'
+import { serversApi } from '../servers/services/serversApi'
+import { seriesApi } from '../content/services/contentApi'
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  const parts: string[] = []
+  if (d > 0) parts.push(`${d}g`)
+  if (h > 0) parts.push(`${h}s`)
+  parts.push(`${m}d`)
+  parts.push(`${s}sn`)
+  return parts.join(' ')
+}
+
+function fmtMbps(mbps: number): string {
+  if (mbps >= 1000) return `${(mbps / 1000).toFixed(2)} Gbps`
+  if (mbps >= 1) return `${mbps.toFixed(1)} Mbps`
+  return `${(mbps * 1000).toFixed(0)} Kbps`
+}
+
+function fmtGB(mb: number): string {
+  return `${(mb / 1024).toFixed(1)} GB`
+}
+
+// ── Circular Progress (SVG) ───────────────────────────────────────────────────
+
+function CircularProgress({ value, size = 76 }: { value: number; size?: number }) {
+  const strokeW = 6
+  const r = (size - strokeW * 2) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - Math.min(Math.max(value, 0), 100) / 100)
+  const cx = size / 2
+  const cy = size / 2
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      style={{ transform: 'rotate(-90deg)' }}
+      className="flex-shrink-0"
+    >
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        stroke="rgba(255,255,255,0.25)"
+        strokeWidth={strokeW}
+        fill="none"
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        stroke="white"
+        strokeWidth={strokeW}
+        fill="none"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+      />
+    </svg>
+  )
+}
+
+// ── Metric Card ───────────────────────────────────────────────────────────────
+
+interface MetricCardProps {
+  gradient: string
+  icon: React.ReactNode
+  title: string
+  mainValue: React.ReactNode
+  subValue?: React.ReactNode
+  percent: number
+  badge?: React.ReactNode
+}
+
+function MetricCard({ gradient, icon, title, mainValue, subValue, percent, badge }: MetricCardProps) {
+  return (
+    <div className={`relative overflow-hidden rounded-3xl p-5 text-white ${gradient}`}>
+      {/* top row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/20">
+            {icon}
+          </div>
+          <span className="text-sm font-medium text-white/90">{title}</span>
+        </div>
+        {badge}
+      </div>
+
+      {/* middle row */}
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-4xl font-bold leading-none tracking-tight">{mainValue}</div>
+          {subValue && (
+            <div className="mt-1.5 text-sm text-white/75">{subValue}</div>
+          )}
+        </div>
+        <div className="relative flex flex-col items-center justify-center">
+          <CircularProgress value={percent} size={76} />
+          <span
+            className="absolute text-xs font-semibold"
+            style={{ transform: 'none' }}
+          >
+            {Math.round(percent)}%
+          </span>
+        </div>
+      </div>
+
+      {/* progress bar */}
+      <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+        <div
+          className="h-full rounded-full bg-white/70"
+          style={{ width: `${Math.min(percent, 100)}%`, transition: 'width 0.6s ease' }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ── Live Badge ────────────────────────────────────────────────────────────────
+
+function LiveBadge() {
+  return (
+    <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 ring-1 ring-emerald-200">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+      </span>
+      Live
+    </span>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export default function DashboardPage() {
+  const [uptimeTick, setUptimeTick] = useState(0)
+
+  const dashboardQuery = useQuery({
+    queryKey: ['dashboard-summary'],
+    queryFn: async () => {
+      const response = await api.get<{
+        total_users: number
+        total_servers: number
+        total_categories: number
+        uptime_seconds: number
+        recent_activity: { action: string; ip_address: string | null; created_at: string | null }[]
+      }>('/admin/dashboard')
+      return response.data
+    },
+    refetchInterval: 30000,
+  })
+
+  const serversQuery = useQuery({
+    queryKey: ['servers-dashboard'],
+    queryFn: serversApi.list,
+    refetchInterval: 30000,
+  })
+
+  const todaySeriesQuery = useQuery({
+    queryKey: ['series-broadcast-today'],
+    queryFn: seriesApi.broadcastToday,
+    refetchInterval: 60000,
+  })
+
+  // Tick uptime every second
+  useEffect(() => {
+    const id = setInterval(() => setUptimeTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const servers = serversQuery.data ?? []
+  const todaySeries = todaySeriesQuery.data ?? []
+
+  // Pick main server for top metrics
+  const mainServer = servers.find((s) => s.server_type === 'main') ?? servers[0] ?? null
+  const metric = mainServer?.latest_metric ?? null
+
+  const cpuPct = metric?.cpu_percent ?? 0
+  const ramPct = metric?.ram_percent ?? 0
+  const diskPct = metric?.disk_percent ?? 0
+  const netInMbps = metric?.network_in_mbps ?? 0
+  const netOutMbps = metric?.network_out_mbps ?? 0
+  const netPct = Math.min(((netInMbps + netOutMbps) / 200) * 100, 100) // 200 Mbps = 100%
+
+  const ramUsedMB = metric?.ram_used ?? 0
+  const ramTotalMB = mainServer?.ram_total ?? 0
+  const diskUsedMB = metric?.disk_used ?? 0
+  const diskTotalMB = mainServer?.disk_total ?? 0
+
+  const uptimeBase = dashboardQuery.data?.uptime_seconds ?? 0
+  const uptimeDisplay = uptimeBase > 0 ? formatUptime(uptimeBase + uptimeTick) : '—'
+
+  const totalServers = dashboardQuery.data?.total_servers ?? servers.length
+  const totalUsers = dashboardQuery.data?.total_users ?? 0
+  const totalCategories = dashboardQuery.data?.total_categories ?? 0
+
+  return (
+    <div className="space-y-6">
+      {/* ── Top bar: Live + Uptime ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <LiveBadge />
+        {uptimeBase > 0 && (
+          <span className="text-sm text-slate-500">
+            Uptime: <span className="font-medium text-slate-700">{uptimeDisplay}</span>
+          </span>
+        )}
+      </div>
+
+      {/* ── Summary boxes ── */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="glass-panel flex items-center gap-4 p-5">
+          <div className="icon-chip">
+            <ServerCog size={18} />
+          </div>
+          <div>
+            <div className="text-2xl font-semibold text-slate-900">{totalServers}</div>
+            <div className="text-sm text-slate-500">Toplam Sunucu</div>
+          </div>
+        </div>
+        <div className="glass-panel flex items-center gap-4 p-5">
+          <div className="icon-chip icon-chip-amber">
+            <Users size={18} />
+          </div>
+          <div>
+            <div className="text-2xl font-semibold text-slate-900">{totalUsers}</div>
+            <div className="text-sm text-slate-500">Toplam Kullanici</div>
+          </div>
+        </div>
+        <div className="glass-panel flex items-center gap-4 p-5">
+          <div className="icon-chip icon-chip-green">
+            <Layers3 size={18} />
+          </div>
+          <div>
+            <div className="text-2xl font-semibold text-slate-900">{totalCategories}</div>
+            <div className="text-sm text-slate-500">Toplam Kategori</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 4 Gradient Metric Cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* CPU */}
+        <MetricCard
+          gradient="bg-gradient-to-br from-orange-400 to-rose-500"
+          icon={<Cpu size={18} />}
+          title="CPU Kullanimi"
+          mainValue={`${cpuPct.toFixed(1)}%`}
+          subValue={mainServer?.cpu_info ? mainServer.cpu_info.slice(0, 28) : undefined}
+          percent={cpuPct}
+        />
+
+        {/* RAM */}
+        <MetricCard
+          gradient="bg-gradient-to-br from-blue-400 to-indigo-600"
+          icon={<MemoryStick size={18} />}
+          title="RAM Kullanimi"
+          mainValue={`${ramPct.toFixed(1)}%`}
+          subValue={
+            ramTotalMB > 0
+              ? `${fmtGB(ramUsedMB)} / ${fmtGB(ramTotalMB)}`
+              : undefined
+          }
+          percent={ramPct}
+        />
+
+        {/* Disk */}
+        <MetricCard
+          gradient="bg-gradient-to-br from-teal-400 to-cyan-500"
+          icon={<HardDrive size={18} />}
+          title="Disk Kullanimi"
+          mainValue={`${diskPct.toFixed(1)}%`}
+          subValue={
+            diskTotalMB > 0
+              ? `${fmtGB(diskUsedMB)} / ${fmtGB(diskTotalMB)}`
+              : undefined
+          }
+          percent={diskPct}
+        />
+
+        {/* Network */}
+        <MetricCard
+          gradient="bg-gradient-to-br from-emerald-400 to-teal-500"
+          icon={<Wifi size={18} />}
+          title="Ag Trafigi"
+          mainValue={
+            <span className="text-2xl">
+              <span className="text-lg">↓</span> {fmtMbps(netInMbps)}
+            </span>
+          }
+          subValue={
+            <span>
+              <span className="mr-1">↑</span>
+              {fmtMbps(netOutMbps)}
+            </span>
+          }
+          percent={netPct}
+          badge={
+            <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">
+              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              Live
+            </span>
+          }
+        />
+      </div>
+
+      {/* ── Server pool + Today's series ── */}
+      <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+        {/* Sunucu havuzu */}
+        <div className="glass-panel p-6">
+          <div className="mb-5">
+            <h3 className="text-xl font-semibold text-slate-900">Sunucu havuzu</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Main server vurgulu, tum node'lar hizli metrik kartlari ile listelenir.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {servers.map((server) => (
+              <div
+                key={server.id}
+                className={`rounded-[26px] border p-4 ${
+                  server.server_type === 'main'
+                    ? 'border-amber-200 bg-amber-50/70'
+                    : 'border-slate-200 bg-slate-50/70'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-base font-semibold text-slate-900">{server.name}</div>
+                      {server.server_type === 'main' && <Crown size={16} className="text-amber-500" />}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">{server.ip_address}</div>
+                  </div>
+                  <StatusBadge status={server.status} />
+                </div>
+                <div className="mt-4 space-y-3">
+                  <MetricBar label="CPU" value={server.latest_metric?.cpu_percent ?? 0} tone="blue" />
+                  <MetricBar label="RAM" value={server.latest_metric?.ram_percent ?? 0} tone="green" />
+                  <MetricBar
+                    label="Net In"
+                    value={Math.min(((server.latest_metric?.network_in_mbps ?? 0) / 1000) * 100, 100)}
+                    tone="blue"
+                    displayValue={fmtMbps(server.latest_metric?.network_in_mbps ?? 0)}
+                  />
+                  <MetricBar
+                    label="Net Out"
+                    value={Math.min(((server.latest_metric?.network_out_mbps ?? 0) / 1000) * 100, 100)}
+                    tone="amber"
+                    displayValue={fmtMbps(server.latest_metric?.network_out_mbps ?? 0)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bugunun Dizileri */}
+        <div className="glass-panel p-6 flex flex-col">
+          <div className="mb-4 flex items-center justify-between flex-shrink-0">
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Bugunun Dizileri</h3>
+              <p className="mt-1 text-sm text-slate-500">Bugun yayinlanacak diziler</p>
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
+              <Film size={13} />
+              {todaySeries.length} dizi
+            </div>
+          </div>
+
+          {todaySeriesQuery.isLoading ? (
+            <div className="flex-1 flex items-center justify-center py-8 text-sm text-slate-400">
+              Yukleniyor...
+            </div>
+          ) : todaySeries.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
+              <Film size={40} className="mb-3 text-slate-200" />
+              <p className="text-sm font-medium text-slate-400">Bugun yayin yok</p>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1" style={{ maxHeight: '420px' }}>
+              {todaySeries.map((s) => (
+                <a
+                  key={s.id}
+                  href="/content/series"
+                  className="flex gap-4 rounded-2xl border border-slate-100 bg-white p-3 hover:bg-blue-50/50 hover:border-blue-100 transition-colors group"
+                >
+                  <div className="flex-shrink-0 w-[70px] h-[105px] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                    {s.poster_url ? (
+                      <img src={s.poster_url} alt={s.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <Film size={20} className="text-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">
+                        {s.title}
+                      </p>
+                      {s.broadcast_day && (
+                        <p className="mt-1 text-xs text-slate-400">{s.broadcast_day}</p>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {s.channel_logo_url && (
+                          <img
+                            src={s.channel_logo_url}
+                            alt={s.broadcast_channel ?? ''}
+                            className="h-4 w-auto object-contain max-w-[28px]"
+                          />
+                        )}
+                        {s.broadcast_channel && (
+                          <span className="text-xs text-slate-600 truncate">{s.broadcast_channel}</span>
+                        )}
+                      </div>
+                      {s.season_count > 0 && (
+                        <p className="mt-1 text-xs text-slate-400">{s.season_count} sezon</p>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
