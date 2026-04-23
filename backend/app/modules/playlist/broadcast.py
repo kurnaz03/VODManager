@@ -170,10 +170,49 @@ def _ssh_exec(client: paramiko.SSHClient, command: str) -> str:
     return stdout.read().decode(errors="replace").strip()
 
 
+def _kill_existing_ffmpeg(playlist_id: int, server_id: int | None = None, db: Session | None = None) -> None:
+    """Kill any existing bash wrapper + FFmpeg processes for this playlist.
+
+    Uses pkill -f with the concat file pattern which is unique per playlist.
+    Handles errors gracefully — the process may not exist yet.
+    """
+    pattern = f"playlist_{playlist_id}_concat"
+    if server_id is None:
+        # Local kill
+        try:
+            subprocess.run(
+                ["pkill", "-TERM", "-f", pattern],
+                capture_output=True,
+            )
+        except Exception:
+            pass
+    else:
+        # Remote kill via SSH
+        if db is None:
+            return
+        try:
+            srv = _get_server(db, server_id)
+            client = _ssh_connect(srv)
+            try:
+                _ssh_exec(client, f"pkill -TERM -f '{pattern}' 2>/dev/null || true")
+            finally:
+                client.close()
+        except Exception:
+            pass
+
+
 def start_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
     pl = _load_playlist(db, playlist_id)
+
+    # Kill any orphan processes for this playlist before starting fresh
+    _kill_existing_ffmpeg(playlist_id, server_id=pl.server_id, db=db)
+
     if pl.status == "playing":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zaten yayinda")
+        # Allow restart: clear the stale state instead of raising
+        pl.status = "stopped"
+        pl.ffmpeg_pid = None
+        db.add(pl)
+        db.commit()
 
     items = sorted(pl.items, key=lambda i: i.position)
     if not items:
@@ -264,6 +303,8 @@ def stop_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
                     ["kill", str(pid)],
                     capture_output=True,
                 )
+            # Safety net: pattern-based kill to catch any orphan bash wrapper + ffmpeg
+            _kill_existing_ffmpeg(playlist_id, server_id=None)
         else:
             srv = _get_server(db, pl.server_id)
             client = _ssh_connect(srv)
@@ -271,6 +312,8 @@ def stop_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
                 _ssh_exec(client, f"kill {pid} 2>/dev/null || true")
             finally:
                 client.close()
+            # Safety net for remote: pattern-based kill via SSH
+            _kill_existing_ffmpeg(playlist_id, server_id=pl.server_id, db=db)
 
     pl.status = "stopped"
     pl.ffmpeg_pid = None

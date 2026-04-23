@@ -23,6 +23,7 @@ from app.modules.content.models import (  # noqa: F401
 from app.modules.transcode.models import TranscodeProfile, TranscodeJob  # noqa: F401
 from app.modules.iptv_users.models import IptvUser, UserBouquet  # noqa: F401
 from app.modules.connections.models import UserConnection, UserWatchHistory  # noqa: F401
+from app.modules.openvpn.models import VpnClient, VpnServerConfig  # noqa: F401
 from app.modules.roles.seed import seed_roles
 from app.api.v1.router import api_router
 from app.modules.stream.router import router as stream_router

@@ -1,0 +1,1 @@
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS audio_map VARCHAR(20) NOT NULL DEFAULT 'first';

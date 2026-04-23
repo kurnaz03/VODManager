@@ -36,7 +36,7 @@ class PlaylistItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     playlist_id = Column(Integer, ForeignKey("playlists.id", ondelete="CASCADE"), nullable=False, index=True)
-    transcode_job_id = Column(Integer, ForeignKey("transcode_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    transcode_job_id = Column(Integer, ForeignKey("transcode_jobs.id", ondelete="SET NULL"), nullable=True, index=True)
     position = Column(Integer, nullable=False, default=0)
     title = Column(String(255), nullable=False)
     duration_seconds = Column(Integer, nullable=False, default=0)

@@ -22,6 +22,7 @@ import TranscodeJobsPage from '../../modules/transcode/pages/TranscodeJobsPage'
 import PlaylistPage from '../../modules/playlist/pages/PlaylistPage'
 import UsersPage from '../../modules/users/pages/UsersPage'
 import AdminPage from '../../modules/admin/pages/AdminPage'
+import VpnClientsPage from '../../modules/vpn/pages/VpnClientsPage'
 
 type AppStatus = 'loading' | 'setup' | 'login' | 'dashboard'
 
@@ -122,6 +123,7 @@ function AppRouter() {
         <Route path="/transcode" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TranscodeJobsPage /></AuthRoute>} />
         <Route path="/playlists" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><PlaylistPage /></AuthRoute>} />
         <Route path="/settings" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><SettingsPage /></AuthRoute>} />
+        <Route path="/vpn-clients" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><VpnClientsPage /></AuthRoute>} />
         <Route
           path="*"
           element={

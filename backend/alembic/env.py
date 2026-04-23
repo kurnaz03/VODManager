@@ -17,6 +17,7 @@ from app.modules.servers.models import (  # noqa: F401
 from app.modules.settings.models import YoutubeCookieCredential  # noqa: F401
 from app.modules.iptv_users.models import IptvUser, UserBouquet  # noqa: F401
 from app.modules.connections.models import UserConnection, UserWatchHistory  # noqa: F401
+from app.modules.openvpn.models import VpnClient, VpnServerConfig  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.SYNC_DATABASE_URL)

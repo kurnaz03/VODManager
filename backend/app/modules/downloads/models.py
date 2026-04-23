@@ -47,6 +47,7 @@ class DownloadQueue(Base):
     speed_mbps = Column(Float, nullable=True)
     eta_seconds = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
+    vpn_client_id = Column(Integer, ForeignKey("vpn_clients.id", ondelete="SET NULL"), nullable=True, index=True)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

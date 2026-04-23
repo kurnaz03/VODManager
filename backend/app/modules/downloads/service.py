@@ -78,6 +78,7 @@ def _serialize_download(item: DownloadQueue) -> dict:
         "speed_mbps": item.speed_mbps,
         "eta_seconds": item.eta_seconds,
         "error_message": item.error_message,
+        "vpn_client_id": item.vpn_client_id,
         "created_by": item.created_by,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
@@ -124,6 +125,7 @@ def create_download(db: Session, payload: DownloadCreate, created_by: int | None
         resolution=payload.resolution if source_type == DownloadSourceType.youtube else "auto",
         file_number=_get_next_file_number(db),
         status=DownloadStatus.queued,
+        vpn_client_id=payload.vpn_client_id,
         created_by=created_by,
     )
     db.add(item)
@@ -431,6 +433,24 @@ def _build_output_template(item: DownloadQueue) -> Path:
     return target_directory / f"{item.file_number:05d}.%(ext)s"
 
 
+def _get_tun0_address() -> str | None:
+    """Return the IPv4 address of the tun0 interface, or None if unavailable."""
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show", "tun0"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("inet "):
+                return line.split()[1].split("/")[0]
+    except Exception:
+        pass
+    return None
+
+
 def _build_download_command(item: DownloadQueue, max_download_speed_mbps: float) -> list[str]:
     output_template = _build_output_template(item)
     command = [
@@ -460,6 +480,11 @@ def _build_download_command(item: DownloadQueue, max_download_speed_mbps: float)
         cookies_path = settings.youtube_cookies_path
         if cookies_path.exists() and cookies_path.stat().st_size > 0:
             command.extend(["--cookies", str(cookies_path)])
+
+    if item.vpn_client_id:
+        tun0_ip = _get_tun0_address()
+        if tun0_ip:
+            command.extend(["--source-address", tun0_ip])
 
     command.append(item.url)
     return command

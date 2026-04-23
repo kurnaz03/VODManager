@@ -46,6 +46,7 @@ export interface DownloadCreatePayload {
   tmdb_year?: number | null
   tmdb_rating?: number | null
   resolution: DownloadResolution
+  vpn_client_id?: number | null
 }
 
 export interface TmdbMovie {

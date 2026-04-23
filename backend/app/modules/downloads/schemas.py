@@ -22,6 +22,7 @@ class DownloadBasePayload(BaseModel):
     tmdb_year: int | None = Field(default=None, ge=1800, le=2100)
     tmdb_rating: float | None = Field(default=None, ge=0, le=10)
     resolution: DownloadResolutionLiteral = "auto"
+    vpn_client_id: int | None = Field(default=None, ge=1)
 
 
 class DownloadCreate(DownloadBasePayload):
@@ -65,6 +66,7 @@ class DownloadResponse(BaseModel):
     speed_mbps: float | None
     eta_seconds: int | None
     error_message: str | None
+    vpn_client_id: int | None
     created_by: int | None
     created_at: datetime
     updated_at: datetime | None

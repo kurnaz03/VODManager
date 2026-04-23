@@ -1,0 +1,15 @@
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS vsync_mode VARCHAR(20) NOT NULL DEFAULT 'cfr';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS async_audio_sync INTEGER DEFAULT 1;
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS avoid_negative_ts VARCHAR(20) NOT NULL DEFAULT 'make_zero';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS fflags_mode VARCHAR(50) NOT NULL DEFAULT '+genpts';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS sc_threshold INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS thread_queue_size INTEGER NOT NULL DEFAULT 512;
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS video_maxrate VARCHAR(20);
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS video_bufsize VARCHAR(20);
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS output_type VARCHAR(30) NOT NULL DEFAULT 'channel_ready';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS container_format VARCHAR(10) NOT NULL DEFAULT 'mp4';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS hwaccel_type VARCHAR(20);
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS deinterlace_mode VARCHAR(20) NOT NULL DEFAULT 'yadif';
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS video_crf INTEGER DEFAULT 18;
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS logo_margin_x INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE transcode_profiles ADD COLUMN IF NOT EXISTS logo_margin_y INTEGER NOT NULL DEFAULT 10;

@@ -4,12 +4,15 @@ import { CheckCircle2, Download, Film, LoaderCircle, RefreshCcw, Trash2, XCircle
 import { useForm } from 'react-hook-form'
 import { contentApi, Category } from '../../content/services/contentApi'
 import { DownloadCreatePayload, DownloadItem, DownloadResolution, TmdbMovie, downloadsApi } from '../services/downloadsApi'
+import { vpnApi, VpnClient } from '../../vpn/services/vpnApi'
 
 interface DownloadFormValues {
   url: string
   title: string
   category_id: number
   resolution: DownloadResolution
+  use_vpn: boolean
+  vpn_client_id: number
 }
 
 const statusLabels: Record<DownloadItem['status'], string> = {
@@ -76,11 +79,14 @@ export default function DownloadsPage() {
       title: '',
       category_id: 0,
       resolution: '1080',
+      use_vpn: false,
+      vpn_client_id: 0,
     },
   })
 
   const currentUrl = watch('url')
   const currentTitle = watch('title')
+  const useVpn = watch('use_vpn')
   const isYoutube = isYoutubeUrl(currentUrl || '')
 
   const debouncedTitle = useDebounce(currentTitle, 300)
@@ -94,6 +100,11 @@ export default function DownloadsPage() {
   const categoriesQuery = useQuery({
     queryKey: ['categories', 'movies'],
     queryFn: () => contentApi.listCategories('movies'),
+  })
+
+  const vpnClientsQuery = useQuery({
+    queryKey: ['vpn-clients'],
+    queryFn: vpnApi.listClients,
   })
 
   const tmdbSearchQuery = useQuery({
@@ -124,7 +135,7 @@ export default function DownloadsPage() {
     mutationFn: (payload: DownloadCreatePayload) => downloadsApi.createDownload(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downloads'] })
-      reset({ url: '', title: '', category_id: 0, resolution: '1080' })
+      reset({ url: '', title: '', category_id: 0, resolution: '1080', use_vpn: false, vpn_client_id: 0 })
       setSelectedTmdb(null)
       setDropdownOpen(false)
     },
@@ -169,6 +180,7 @@ export default function DownloadsPage() {
   }, [downloadsQuery.data])
 
   const movieCategories = categoriesQuery.data ?? []
+  const activeVpnClients = (vpnClientsQuery.data ?? []).filter((c: VpnClient) => c.is_active)
 
   return (
     <div className="space-y-6">
@@ -213,6 +225,7 @@ export default function DownloadsPage() {
                 tmdb_backdrop_url: selectedTmdb?.backdrop_url ?? null,
                 tmdb_year: selectedTmdb?.release_year ?? null,
                 tmdb_rating: selectedTmdb?.rating ?? null,
+                vpn_client_id: values.use_vpn && values.vpn_client_id ? Number(values.vpn_client_id) : null,
               }),
             )}
           >
@@ -330,6 +343,36 @@ export default function DownloadsPage() {
                 </div>
               )}
             </div>
+
+            {isYoutube && (
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                    {...register('use_vpn')}
+                  />
+                  <span className="text-sm font-medium text-slate-700">VPN Kullan</span>
+                </label>
+                {useVpn && (
+                  <div>
+                    <label className="panel-label">VPN Istemcisi</label>
+                    {activeVpnClients.length === 0 ? (
+                      <p className="text-sm text-rose-600">Aktif VPN istemcisi bulunamadi.</p>
+                    ) : (
+                      <select className="panel-select" {...register('vpn_client_id', { valueAsNumber: true })}>
+                        <option value={0}>VPN istemcisi secin</option>
+                        {activeVpnClients.map((client: VpnClient) => (
+                          <option key={client.id} value={client.id}>
+                            {client.name}{client.description ? ` — ${client.description}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end">
               <button type="submit" className="primary-button" disabled={createMutation.isPending}>
