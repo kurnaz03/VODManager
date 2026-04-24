@@ -266,9 +266,18 @@ def update_user(db: Session, user_id: int, payload: IptvUserUpdate) -> dict[str,
 
 
 def delete_user(db: Session, user_id: int) -> None:
+    from app.modules.connections.models import UserConnection, UserWatchHistory
+
     user = db.query(IptvUser).filter(IptvUser.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanici bulunamadi")
+
+    # İlgili kayıtları önce sil (DB-level CASCADE olmasa da çalışır)
+    db.query(UserConnection).filter(UserConnection.user_id == user_id).delete(synchronize_session="fetch")
+    db.query(UserWatchHistory).filter(UserWatchHistory.user_id == user_id).delete(synchronize_session="fetch")
+    db.query(UserBouquet).filter(UserBouquet.user_id == user_id).delete(synchronize_session="fetch")
+    db.flush()
+
     db.delete(user)
     db.commit()
 
