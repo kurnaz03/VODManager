@@ -195,10 +195,9 @@ def build_ovpn_content(client: VpnClient, cfg: VpnServerConfig) -> str:
     if ta_key_content:
         lines += [
             "",
-            "key-direction 1",
-            "<tls-auth>",
+            "<tls-crypt>",
             ta_key_content,
-            "</tls-auth>",
+            "</tls-crypt>",
         ]
 
     return "\n".join(lines)
