@@ -72,9 +72,10 @@ async def get_tv_m3u8_proxied(db: Session, channel_id: int, username: str, passw
     return "\n".join(lines) + "\n"
 
 
-async def relay_tv_segment(db: Session, channel_id: int, segment: str) -> tuple[bytes, str]:
+async def relay_tv_segment(db: Session, channel_id: int, segment: str, query_string: str = "") -> tuple[bytes, str]:
     """
     Fetch a single HLS segment from the source stream URL base and return (content, media_type).
+    query_string is passed from the request to preserve session params like nimblesessionid.
     """
     channel = db.query(TvChannel).filter(TvChannel.id == channel_id).first()
     if channel is None or not channel.stream_url:
@@ -85,6 +86,8 @@ async def relay_tv_segment(db: Session, channel_id: int, segment: str) -> tuple[
     path_parts = parsed.path.rsplit("/", 1)
     base_path = path_parts[0] + "/" if len(path_parts) > 1 else "/"
     lb_url = f"{parsed.scheme}://{parsed.netloc}{base_path}{segment}"
+    if query_string:
+        lb_url += f"?{query_string}"
 
     media_type = "application/vnd.apple.mpegurl" if segment.endswith(".m3u8") else "video/MP2T"
 
@@ -92,7 +95,7 @@ async def relay_tv_segment(db: Session, channel_id: int, segment: str) -> tuple[
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(lb_url)
             if resp.status_code != 200:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Segment alinamadi")
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Segment alinamadi: {resp.status_code}")
             return resp.content, media_type
     except HTTPException:
         raise

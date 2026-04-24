@@ -306,9 +306,10 @@ async def serve_tv_channel(
 
 
 @router.get("/hls-proxy/tv/{channel_id}/{segment}", tags=["stream"])
-async def hls_proxy_tv_segment(channel_id: int, segment: str, db: Session = Depends(get_db)):
+async def hls_proxy_tv_segment(channel_id: int, segment: str, request: Request, db: Session = Depends(get_db)):
     """Segment relay for TV channels — no auth required (m3u8 was auth-protected)."""
-    content, media_type = await tv_stream.relay_tv_segment(db, channel_id, segment)
+    query_string = str(request.query_params) if request.query_params else ""
+    content, media_type = await tv_stream.relay_tv_segment(db, channel_id, segment, query_string)
     return Response(content=content, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
 
