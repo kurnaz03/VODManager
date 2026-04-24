@@ -238,7 +238,8 @@ def start_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
             start_new_session=True,
         )
         pid = proc.pid
-        stream_url = f"http://{MAIN_SERVER_IP}/streams/{playlist_id}/stream.m3u8"
+        # Local HLS served directly via nginx /hls/ on port 8080
+        stream_url = None
     else:
         # Remote SSH execution (LB server)
         # Use HTTP URLs in concat so FFmpeg on the remote server streams video

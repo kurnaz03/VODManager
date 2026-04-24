@@ -115,6 +115,7 @@ echo "[10/10] Firewall ayarlaniyor..."
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
+ufw allow 8080/tcp
 ufw --force enable
 
 echo ""

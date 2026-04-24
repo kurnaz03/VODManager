@@ -191,6 +191,12 @@ server {
         proxy_set_header Host $host;
     }
 
+    location /uploads/ {
+        alias /var/www/vod-manager/shared/uploads/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
     location /streams/ {
         alias /var/www/vod-manager/shared/hls/;
         add_header Cache-Control "no-cache";
@@ -201,6 +207,12 @@ server {
         }
     }
 
+    location /transcode/ {
+        alias /var/www/vod-manager/shared/transcode/;
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -208,6 +220,68 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
     gzip_min_length 1000;
+}
+
+# M3U Plus / Xtream stream port
+server {
+    listen 8080;
+    server_name 62.210.92.252;
+
+    client_max_body_size 2G;
+
+    location /get.php {
+        proxy_pass http://127.0.0.1:8000/get.php;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+    }
+
+    location /live/ {
+        proxy_pass http://127.0.0.1:8000/live/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+        proxy_buffering off;
+    }
+
+    location /movie/ {
+        proxy_pass http://127.0.0.1:8000/movie/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 600s;
+        proxy_buffering off;
+    }
+
+    location /series/ {
+        proxy_pass http://127.0.0.1:8000/series/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 600s;
+        proxy_buffering off;
+    }
+
+    location /hls/ {
+        alias /var/www/vod-manager/shared/hls/;
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+        }
+    }
+
+    location /hls-proxy/ {
+        proxy_pass http://127.0.0.1:8000/hls-proxy/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 30s;
+        proxy_buffering off;
+    }
 }
 NGINX_EOF
 
@@ -290,6 +364,7 @@ ufw default allow outgoing
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
+ufw allow 8080/tcp
 ufw --force enable
 ufw status
 echo "[OK] Firewall ayarlandi"
