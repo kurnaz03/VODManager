@@ -156,7 +156,14 @@ def build_ovpn_content(client: VpnClient, cfg: VpnServerConfig) -> str:
     ta_key_content = ""
     ta_key_path = Path(cfg.ta_key_path)
     if ta_key_path.exists():
-        ta_key_content = ta_key_path.read_text().strip()
+        try:
+            ta_key_content = ta_key_path.read_text().strip()
+        except PermissionError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"ta.key dosyasi okunamadi: izin hatasi ({cfg.ta_key_path}). "
+                       f"Sunucuda: chmod 640 {cfg.ta_key_path} && chown root:www-data {cfg.ta_key_path}",
+            )
 
     lines = [
         "client",

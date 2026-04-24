@@ -139,6 +139,16 @@ def record_connection(
     """
     now = datetime.now(timezone.utc)
 
+    # Kanal değiştirmede eski bağlantıları kapat:
+    # Aynı user_id + IP için farklı stream'e bağlı aktif kayıtları pasife al.
+    db.query(UserConnection).filter(
+        UserConnection.user_id == user.id,
+        UserConnection.ip_address == ip,
+        UserConnection.is_active == True,
+        (UserConnection.stream_id != stream_id) | (UserConnection.stream_type != stream_type),
+    ).update({"is_active": False}, synchronize_session=False)
+    db.flush()
+
     # Aynı kullanıcı + IP + stream için mevcut aktif bağlantı var mı?
     conn = db.query(UserConnection).filter(
         UserConnection.user_id == user.id,
