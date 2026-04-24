@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse, Response
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -14,6 +14,8 @@ from app.modules.content.models import (
 from app.modules.iptv_users.models import IptvUser, UserBouquet
 from app.modules.playlist.models import Playlist
 from app.modules.connections import service as conn_svc
+from app.modules.tv.models import TvChannel
+from app.modules.tv import stream_service as tv_stream
 
 router = APIRouter()
 
@@ -146,6 +148,32 @@ def get_m3u_plus(
             lines.append(extinf)
             lines.append(stream_url)
 
+    # TV Channels (from tv_channel_bouquets)
+    from app.modules.tv.models import TvChannel, TvChannelBouquet
+    bouquet_ids = [ub.bouquet_id for ub in (user.bouquets or [])]
+    if bouquet_ids:
+        tv_bouquet_items = (
+            db.query(TvChannelBouquet)
+            .filter(TvChannelBouquet.bouquet_id.in_(bouquet_ids))
+            .order_by(TvChannelBouquet.position.asc())
+            .all()
+        )
+        for tbi in tv_bouquet_items:
+            ch = db.query(TvChannel).filter(TvChannel.id == tbi.tv_channel_id, TvChannel.is_active == True).first()
+            if ch is None:
+                continue
+            bq = db.query(Bouquet).filter(Bouquet.id == tbi.bouquet_id).first()
+            group = bq.name if bq else "TV"
+            logo = ch.logo_url or ""
+            epg_id = ch.epg_channel_id or ch.id
+            stream_url = f"{base}/live/tv/{username}/{password}/{ch.id}.ts"
+            extinf = (
+                f'#EXTINF:-1 tvg-id="{epg_id}" tvg-name="{ch.name}" '
+                f'tvg-logo="{logo}" group-title="{group}",{ch.name}'
+            )
+            lines.append(extinf)
+            lines.append(stream_url)
+
     return "\n".join(lines) + "\n"
 
 
@@ -255,6 +283,33 @@ def serve_series(username: str, password: str, item_id: int, request: Request, d
             if first_ep.source_url:
                 return RedirectResponse(url=first_ep.source_url, status_code=302)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi dosyasi bulunamadi")
+
+
+@router.get("/live/tv/{username}/{password}/{channel_id}", tags=["stream"])
+@router.get("/live/tv/{username}/{password}/{channel_id}.ts", tags=["stream"])
+async def serve_tv_channel(
+    username: str, password: str, channel_id: int, request: Request, db: Session = Depends(get_db)
+):
+    """
+    Xtream Codes style TV channel proxy via /live/tv/ prefix.
+    Authenticates the IPTV user, fetches source HLS stream, rewrites segment URLs.
+    """
+    user = _auth_iptv_user(db, username, password)
+    channel = db.query(TvChannel).filter(TvChannel.id == channel_id, TvChannel.is_active == True).first()
+    if channel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TV kanal bulunamadi")
+    _do_checks_and_record(db, user, request, channel_id, "tv", channel.name)
+
+    # HLS proxy: rewrite m3u8 segments
+    rewritten = await tv_stream.get_tv_m3u8_proxied(db, channel_id, username, password)
+    return PlainTextResponse(content=rewritten, media_type="application/vnd.apple.mpegurl")
+
+
+@router.get("/hls-proxy/tv/{channel_id}/{segment}", tags=["stream"])
+async def hls_proxy_tv_segment(channel_id: int, segment: str, db: Session = Depends(get_db)):
+    """Segment relay for TV channels — no auth required (m3u8 was auth-protected)."""
+    content, media_type = await tv_stream.relay_tv_segment(db, channel_id, segment)
+    return Response(content=content, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/hls-proxy/{playlist_id}/{segment}", tags=["stream"])

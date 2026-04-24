@@ -23,6 +23,7 @@ import PlaylistPage from '../../modules/playlist/pages/PlaylistPage'
 import UsersPage from '../../modules/users/pages/UsersPage'
 import AdminPage from '../../modules/admin/pages/AdminPage'
 import VpnClientsPage from '../../modules/vpn/pages/VpnClientsPage'
+import TvChannelsPage from '../../modules/tv/pages/TvChannelsPage'
 
 type AppStatus = 'loading' | 'setup' | 'login' | 'dashboard'
 
@@ -124,6 +125,7 @@ function AppRouter() {
         <Route path="/playlists" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><PlaylistPage /></AuthRoute>} />
         <Route path="/settings" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><SettingsPage /></AuthRoute>} />
         <Route path="/vpn-clients" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><VpnClientsPage /></AuthRoute>} />
+        <Route path="/tv-channels" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TvChannelsPage /></AuthRoute>} />
         <Route
           path="*"
           element={
