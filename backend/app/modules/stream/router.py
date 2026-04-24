@@ -221,11 +221,23 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
                 media_type="application/vnd.apple.mpegurl",
             )
 
-        # Yerel HLS (LB yok, ana sunucu)
+        # Yerel HLS (LB yok, ana sunucu) — segment URL'leri mutlak yap
         hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
         if os.path.isfile(hls_path):
-            hls_url = f"http://{SERVER_HOST}:{SERVER_PORT}/hls/{playlist.id}/stream.m3u8"
-            return RedirectResponse(url=hls_url, status_code=302)
+            with open(hls_path, "r") as f:
+                m3u8_content = f.read()
+            hls_base = f"http://{SERVER_HOST}:{SERVER_PORT}/hls/{playlist.id}/"
+            rewritten_lines = []
+            for line in m3u8_content.splitlines():
+                if line.strip() and not line.startswith("#"):
+                    rewritten_lines.append(hls_base + line.strip())
+                else:
+                    rewritten_lines.append(line)
+            return Response(
+                content="\n".join(rewritten_lines) + "\n",
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache"},
+            )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD Channel stream bulunamadi")
 
     if not _check_item_access(db, user, "tv", item_id):
