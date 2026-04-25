@@ -540,13 +540,24 @@ function PlaylistListView({
           <h1 className="text-2xl font-bold text-slate-800">VOD Channel / Playlist</h1>
           <p className="mt-1 text-sm text-slate-500">Transcode edilmis videolardan kanal playlist'leri olusturun</p>
         </div>
-        <button
-          onClick={onCreate}
-          className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
-        >
-          <Plus size={16} />
-          Yeni Playlist
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/v1/playlists/epg.xml"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+          >
+            <Download size={15} />
+            Toplu EPG Indir
+          </a>
+          <button
+            onClick={onCreate}
+            className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
+          >
+            <Plus size={16} />
+            Yeni Playlist
+          </button>
+        </div>
       </div>
 
       {/* Table */}

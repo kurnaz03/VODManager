@@ -95,6 +95,22 @@ def get_epg_programs(playlist_id: int, db: Session = Depends(get_db)):
     return broadcast.generate_epg_programs(db, playlist_id)
 
 
+@epg_router.get("/epg")
+def get_combined_epg(db: Session = Depends(get_db)):
+    xml_content = broadcast.generate_combined_epg_xml(db)
+    return Response(content=xml_content, media_type="application/xml")
+
+
+@epg_router.get("/epg.xml")
+def download_combined_epg(db: Session = Depends(get_db)):
+    xml_content = broadcast.generate_combined_epg_xml(db)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={"Content-Disposition": "attachment; filename=epg_all_channels.xml"},
+    )
+
+
 @epg_router.get("/{playlist_id}/epg")
 def get_epg(playlist_id: int, db: Session = Depends(get_db)):
     xml_content = broadcast.generate_epg_xml(db, playlist_id)

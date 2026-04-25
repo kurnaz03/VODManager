@@ -461,6 +461,65 @@ def generate_epg_xml(db: Session, playlist_id: int) -> str:
     return "\n".join(lines)
 
 
+def generate_combined_epg_xml(db: Session) -> str:
+    """Generate combined XMLTV EPG for all non-empty playlists (24h each)."""
+    from datetime import timedelta
+
+    playlists = (
+        db.query(Playlist)
+        .options(joinedload(Playlist.items))
+        .all()
+    )
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+    lines.append('<tv generator-info-name="VOD Manager">')
+
+    # First pass: channel definitions (skip empty playlists)
+    active = []
+    for pl in playlists:
+        items = sorted(pl.items, key=lambda i: i.position)
+        if not items:
+            continue
+        active.append((pl, items))
+        lines.append(f'  <channel id="playlist_{pl.id}">')
+        lines.append(f'    <display-name lang="tr">{_xml_escape(pl.name)}</display-name>')
+        lines.append(f'  </channel>')
+
+    # Second pass: programme entries
+    for pl, items in active:
+        loop_start = _compute_loop_start(pl, items)
+        end_time = loop_start + timedelta(hours=24)
+        current_time = loop_start
+        item_idx = 0
+
+        while current_time < end_time:
+            item = items[item_idx % len(items)]
+            duration = item.duration_seconds or 60
+            prog_end = min(current_time + timedelta(seconds=duration), end_time)
+
+            start_str = current_time.strftime("%Y%m%d%H%M%S") + " +0000"
+            stop_str = prog_end.strftime("%Y%m%d%H%M%S") + " +0000"
+
+            title = item.tmdb_title or item.title
+            desc = item.tmdb_overview or ""
+            poster = item.tmdb_poster_url or ""
+
+            lines.append(f'  <programme start="{start_str}" stop="{stop_str}" channel="playlist_{pl.id}">')
+            lines.append(f'    <title lang="tr">{_xml_escape(title)}</title>')
+            if desc:
+                lines.append(f'    <desc lang="tr">{_xml_escape(desc)}</desc>')
+            if poster:
+                lines.append(f'    <icon src="{_xml_escape(poster)}"/>')
+            lines.append('    <category lang="tr">Film</category>')
+            lines.append("  </programme>")
+
+            current_time = prog_end
+            item_idx += 1
+
+    lines.append("</tv>")
+    return "\n".join(lines)
+
+
 def generate_epg_programs(db: Session, playlist_id: int) -> list[dict[str, Any]]:
     """Return EPG programs as JSON list for frontend consumption."""
     from datetime import timedelta
