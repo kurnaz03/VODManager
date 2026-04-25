@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.modules.openvpn.models import VpnClient  # noqa: F401  — FK resolution
 
 
 class DownloadSourceType(str, enum.Enum):
