@@ -860,6 +860,7 @@ function PlaylistDetailView({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['playlist', playlist.id] })
       queryClient.invalidateQueries({ queryKey: ['playlists'] })
+      queryClient.invalidateQueries({ queryKey: ['playlist-jobs'] })
       setDirty(false)
       onToast('Video kaldirildi', 'ok')
     },

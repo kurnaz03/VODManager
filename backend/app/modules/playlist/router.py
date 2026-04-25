@@ -14,6 +14,12 @@ router = APIRouter(
     dependencies=[Depends(get_current_user_id)],
 )
 
+# Auth-free router for EPG endpoints (IPTV devices need direct access)
+epg_router = APIRouter(
+    prefix="/playlists",
+    tags=["playlists"],
+)
+
 
 @router.get("")
 def list_playlists(db: Session = Depends(get_db)):
@@ -89,13 +95,13 @@ def get_epg_programs(playlist_id: int, db: Session = Depends(get_db)):
     return broadcast.generate_epg_programs(db, playlist_id)
 
 
-@router.get("/{playlist_id}/epg")
+@epg_router.get("/{playlist_id}/epg")
 def get_epg(playlist_id: int, db: Session = Depends(get_db)):
     xml_content = broadcast.generate_epg_xml(db, playlist_id)
     return Response(content=xml_content, media_type="application/xml")
 
 
-@router.get("/{playlist_id}/epg.xml")
+@epg_router.get("/{playlist_id}/epg.xml")
 def download_epg(playlist_id: int, db: Session = Depends(get_db)):
     xml_content = broadcast.generate_epg_xml(db, playlist_id)
     return Response(
