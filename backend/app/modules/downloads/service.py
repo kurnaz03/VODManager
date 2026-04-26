@@ -122,6 +122,7 @@ def _get_next_file_number(db: Session) -> int:
 
 
 def create_download(db: Session, payload: DownloadCreate, created_by: int | None) -> dict:
+    print(f"CREATE_DOWNLOAD: category_type={payload.category_type}, series_id={payload.series_id}, season_id={payload.season_id}, episode_number={payload.episode_number}, category_id={payload.category_id}", flush=True)
     # category_type'a gore validasyon: film ise movie_category kontrol, dizi ise series/season kontrol
     if payload.category_type == "series":
         if not payload.series_id or not payload.season_id or not payload.episode_number:

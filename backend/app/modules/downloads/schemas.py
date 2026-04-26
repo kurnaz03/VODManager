@@ -52,7 +52,7 @@ class DownloadResponse(BaseModel):
     title: str
     url: str
     source_type: DownloadSourceTypeLiteral
-    category_id: int
+    category_id: int | None = None
     category_type: str
     category_name: str | None
     tmdb_id: int | None

@@ -26,7 +26,14 @@ def create_download(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    return service.create_download(db, payload, user_id)
+    print(f"ROUTER_CREATE_DOWNLOAD: payload={payload.model_dump()}", flush=True)
+    try:
+        result = service.create_download(db, payload, user_id)
+        print(f"ROUTER_CREATE_DOWNLOAD: success, result_id={result.get('id')}", flush=True)
+        return result
+    except Exception as e:
+        print(f"ROUTER_CREATE_DOWNLOAD: ERROR={type(e).__name__}: {e}", flush=True)
+        raise
 
 
 @router.get("/downloads", response_model=list[DownloadResponse], tags=["downloads"])

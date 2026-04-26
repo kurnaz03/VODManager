@@ -31,7 +31,7 @@ class DownloadQueue(Base):
     title = Column(String(255), nullable=False, index=True)
     url = Column(Text, nullable=False)
     source_type = Column(Enum(DownloadSourceType), nullable=False, index=True)
-    category_id = Column(Integer, ForeignKey("movie_categories.id", ondelete="RESTRICT"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("movie_categories.id", ondelete="SET NULL"), nullable=True, index=True)
     category_type = Column(String(20), nullable=False, default="movies", index=True)
     tmdb_id = Column(Integer, nullable=True, index=True)
     tmdb_title = Column(String(255), nullable=True)
