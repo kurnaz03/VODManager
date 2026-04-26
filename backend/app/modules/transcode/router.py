@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -68,13 +68,19 @@ def delete_profile(profile_id: int, db: Session = Depends(get_db)):
 @router.post("/{profile_id}/logo", response_model=TranscodeProfileResponse)
 async def upload_logo(
     profile_id: int,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    import logging
+    logger = logging.getLogger(__name__)
+    ct = request.headers.get("content-type", "MISSING")
+    logger.warning(f"LOGO DEBUG: content-type={ct}, file.filename={file.filename}, file.content_type={file.content_type}")
     if file.content_type not in ALLOWED_LOGO_TYPES:
+        logger.warning(f"LOGO REJECTED: content_type={file.content_type} not in {ALLOWED_LOGO_TYPES}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Desteklenmeyen dosya formati. PNG, JPG, SVG veya WebP yukleyin.",
+            detail=f"Desteklenmeyen dosya formati ({file.content_type}). PNG, JPG, SVG veya WebP yukleyin.",
         )
 
     content = await file.read()

@@ -5,11 +5,15 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Request interceptor — access token ekle
+// Request interceptor — access token ekle, FormData için Content-Type otomatik
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  // FormData gönderildiğinde Content-Type'ı silip tarayıcının boundary ile set etmesini sağla
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
   }
   return config
 })
