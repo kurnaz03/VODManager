@@ -12,7 +12,7 @@ DownloadResolutionLiteral = Literal["2160", "1080", "720", "auto"]
 class DownloadBasePayload(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     url: HttpUrl
-    category_id: int = Field(ge=1)
+    category_id: int | None = Field(default=None, ge=1)
     # 'movies' veya 'series' – varsayilan film indirmesi
     category_type: Literal["movies", "series"] = "movies"
     tmdb_id: int | None = Field(default=None, ge=1)

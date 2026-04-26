@@ -130,9 +130,12 @@ def create_download(db: Session, payload: DownloadCreate, created_by: int | None
                 detail="Dizi indirmesi icin series_id, season_id ve episode_number zorunludur",
             )
         _ensure_series_season(db, payload.series_id, payload.season_id)
-        # Dizi indirmelerinde category_id hala film kategorisi olarak kullaniliyor (dosya yolu icin)
-        _ensure_movie_category(db, payload.category_id)
     else:
+        if not payload.category_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Film indirmesi icin category_id zorunludur",
+            )
         _ensure_movie_category(db, payload.category_id)
 
     source_type = _detect_source_type(str(payload.url))
@@ -459,7 +462,11 @@ def queue_approved_downloads() -> int:
 
 
 def _build_output_template(item: DownloadQueue) -> Path:
-    target_directory = settings.movies_uploads_path / str(item.category_id)
+    # Dizi modunda series_id bazli klasor, film modunda category_id bazli klasor
+    if item.category_type == "series" and item.series_id:
+        target_directory = settings.movies_uploads_path / f"series_{item.series_id}"
+    else:
+        target_directory = settings.movies_uploads_path / str(item.category_id)
     target_directory.mkdir(parents=True, exist_ok=True)
     return target_directory / f"{item.file_number:05d}.%(ext)s"
 
@@ -577,7 +584,11 @@ def _update_progress(db: Session, item: DownloadQueue, line: str) -> None:
 
 
 def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
-    output_directory = settings.movies_uploads_path / str(item.category_id)
+    # Dizi modunda series_id bazli klasor, film modunda category_id bazli klasor
+    if item.category_type == "series" and item.series_id:
+        output_directory = settings.movies_uploads_path / f"series_{item.series_id}"
+    else:
+        output_directory = settings.movies_uploads_path / str(item.category_id)
     candidates = sorted(output_directory.glob(f"{item.file_number:05d}.*"))
     output_file = candidates[0] if candidates else None
     if output_file is None:

@@ -40,7 +40,7 @@ export interface DownloadItem {
 export interface DownloadCreatePayload {
   title: string
   url: string
-  category_id: number
+  category_id?: number | null
   // 'movies' veya 'series' – default movies
   category_type: 'movies' | 'series'
   tmdb_id?: number | null
