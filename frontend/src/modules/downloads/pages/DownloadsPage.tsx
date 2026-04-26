@@ -347,7 +347,7 @@ export default function DownloadsPage() {
                   <input
                     className="panel-input"
                     placeholder="Film adini yazin (TMDB otomatik arar)"
-                    {...register('title', { required: true })}
+                    {...register('title', { required: categoryType === 'movies' })}
                     onChange={(e) => {
                       setValue('title', e.target.value)
                       if (selectedTmdb) setSelectedTmdb(null)
@@ -487,7 +487,7 @@ export default function DownloadsPage() {
               {categoryType === 'movies' && (
               <div>
                 <label className="panel-label">Kategori</label>
-                <select className="panel-select" {...register('category_id', { valueAsNumber: true, required: true })}>
+                <select className="panel-select" {...register('category_id', { valueAsNumber: true, required: categoryType === 'movies' })}>
                   <option value={0}>Movie kategorisi secin</option>
                   {movieCategories.map((category: Category) => (
                     <option key={category.id} value={category.id}>
