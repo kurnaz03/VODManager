@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, Film, LoaderCircle, RefreshCcw, Trash2, XCircle, ListX } from 'lucide-react'
+import { CheckCircle2, Download, Film, LoaderCircle, RefreshCcw, Trash2, XCircle, ListX, Tv } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { contentApi, Category } from '../../content/services/contentApi'
-import { DownloadCreatePayload, DownloadItem, DownloadResolution, TmdbMovie, downloadsApi } from '../services/downloadsApi'
+import { contentApi, Category, seriesApi, SeriesContent, Season } from '../../content/services/contentApi'
+import { DownloadCreatePayload, DownloadItem, DownloadResolution, TmdbMovie, TmdbTv, downloadsApi } from '../services/downloadsApi'
 import { vpnApi, VpnClient } from '../../vpn/services/vpnApi'
 
+// Form degerlerinin tipi – hem film hem dizi modunu kapsar
 interface DownloadFormValues {
   url: string
   title: string
@@ -13,6 +14,10 @@ interface DownloadFormValues {
   resolution: DownloadResolution
   use_vpn: boolean
   vpn_client_id: number
+  // Dizi modu icin ek alanlar
+  series_id: number
+  season_id: number
+  episode_number: number
 }
 
 const statusLabels: Record<DownloadItem['status'], string> = {
@@ -39,20 +44,14 @@ function isYoutubeUrl(url: string) {
 }
 
 function formatSpeed(value: number | null) {
-  if (value == null) {
-    return '-'
-  }
+  if (value == null) return '-'
   return `${value.toFixed(2)} MB/s`
 }
 
 function formatSize(value: number | null) {
-  if (!value) {
-    return '-'
-  }
+  if (!value) return '-'
   const mb = value / (1024 * 1024)
-  if (mb < 1024) {
-    return `${mb.toFixed(1)} MB`
-  }
+  if (mb < 1024) return `${mb.toFixed(1)} MB`
   return `${(mb / 1024).toFixed(2)} GB`
 }
 
@@ -67,11 +66,22 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function DownloadsPage() {
   const queryClient = useQueryClient()
+
+  // Kategori tipi secimi: 'movies' (varsayilan) veya 'series'
+  const [categoryType, setCategoryType] = useState<'movies' | 'series'>('movies')
+
+  // Film modu TMDB state'leri
   const [selectedTmdb, setSelectedTmdb] = useState<TmdbMovie | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Dizi modu TMDB state'leri
+  const [selectedTmdbTv, setSelectedTmdbTv] = useState<TmdbTv | null>(null)
+  const [tvDropdownOpen, setTvDropdownOpen] = useState(false)
+  const tvDropdownRef = useRef<HTMLDivElement>(null)
+
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const { register, handleSubmit, setValue, watch, reset } = useForm<DownloadFormValues>({
     defaultValues: {
@@ -81,15 +91,40 @@ export default function DownloadsPage() {
       resolution: '1080',
       use_vpn: false,
       vpn_client_id: 0,
+      series_id: 0,
+      season_id: 0,
+      episode_number: 1,
     },
   })
 
   const currentUrl = watch('url')
   const currentTitle = watch('title')
   const useVpn = watch('use_vpn')
+  const selectedSeriesId = watch('series_id')
   const isYoutube = isYoutubeUrl(currentUrl || '')
-
   const debouncedTitle = useDebounce(currentTitle, 300)
+
+  // Kategori tipi degisince formu sifirla
+  const handleCategoryTypeChange = (newType: 'movies' | 'series') => {
+    setCategoryType(newType)
+    setSelectedTmdb(null)
+    setSelectedTmdbTv(null)
+    setDropdownOpen(false)
+    setTvDropdownOpen(false)
+    reset({
+      url: '',
+      title: '',
+      category_id: 0,
+      resolution: '1080',
+      use_vpn: false,
+      vpn_client_id: 0,
+      series_id: 0,
+      season_id: 0,
+      episode_number: 1,
+    })
+  }
+
+  // ── Queries ──────────────────────────────────────────────────────────────────
 
   const downloadsQuery = useQuery({
     queryKey: ['downloads', statusFilter],
@@ -97,6 +132,7 @@ export default function DownloadsPage() {
     refetchInterval: 3000,
   })
 
+  // Film kategorileri (hem film hem dizi modunda category_id icin kullanilir – dosya yolu icin)
   const categoriesQuery = useQuery({
     queryKey: ['categories', 'movies'],
     queryFn: () => contentApi.listCategories('movies'),
@@ -107,20 +143,49 @@ export default function DownloadsPage() {
     queryFn: vpnApi.listClients,
   })
 
+  // Dizi listesi – sadece dizi modu aktifken yukle
+  const seriesListQuery = useQuery({
+    queryKey: ['series-list'],
+    queryFn: () => seriesApi.list(),
+    enabled: categoryType === 'series',
+  })
+
+  // Secilen dizinin sezonlari
+  const seasonsQuery = useQuery({
+    queryKey: ['series-seasons', selectedSeriesId],
+    queryFn: () => seriesApi.listSeasons(Number(selectedSeriesId)),
+    enabled: categoryType === 'series' && Number(selectedSeriesId) > 0,
+  })
+
+  // Film TMDB araması – sadece film modunda
   const tmdbSearchQuery = useQuery({
     queryKey: ['tmdb-movie-search', debouncedTitle],
     queryFn: () => downloadsApi.searchTmdbMovies(debouncedTitle),
-    enabled: debouncedTitle.trim().length >= 2 && !selectedTmdb,
+    enabled: categoryType === 'movies' && debouncedTitle.trim().length >= 2 && !selectedTmdb,
   })
 
-  // Open dropdown when results arrive
+  // Dizi TMDB araması – sadece dizi modunda
+  const tmdbTvSearchQuery = useQuery({
+    queryKey: ['tmdb-tv-search', debouncedTitle],
+    queryFn: () => downloadsApi.searchTmdbTv(debouncedTitle),
+    enabled: categoryType === 'series' && debouncedTitle.trim().length >= 2 && !selectedTmdbTv,
+  })
+
+  // Film dropdown ac
   useEffect(() => {
     if (tmdbSearchQuery.data && tmdbSearchQuery.data.length > 0 && !selectedTmdb) {
       setDropdownOpen(true)
     }
   }, [tmdbSearchQuery.data, selectedTmdb])
 
-  // Close dropdown on outside click
+  // Dizi dropdown ac
+  useEffect(() => {
+    if (tmdbTvSearchQuery.data && tmdbTvSearchQuery.data.length > 0 && !selectedTmdbTv) {
+      setTvDropdownOpen(true)
+    }
+  }, [tmdbTvSearchQuery.data, selectedTmdbTv])
+
+  // Film dropdown disariya tiklaninca kapat
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -131,13 +196,28 @@ export default function DownloadsPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // Dizi dropdown disariya tiklaninca kapat
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tvDropdownRef.current && !tvDropdownRef.current.contains(e.target as Node)) {
+        setTvDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+
   const createMutation = useMutation({
     mutationFn: (payload: DownloadCreatePayload) => downloadsApi.createDownload(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downloads'] })
-      reset({ url: '', title: '', category_id: 0, resolution: '1080', use_vpn: false, vpn_client_id: 0 })
+      reset({ url: '', title: '', category_id: 0, resolution: '1080', use_vpn: false, vpn_client_id: 0, series_id: 0, season_id: 0, episode_number: 1 })
       setSelectedTmdb(null)
+      setSelectedTmdbTv(null)
       setDropdownOpen(false)
+      setTvDropdownOpen(false)
     },
   })
 
@@ -169,6 +249,50 @@ export default function DownloadsPage() {
     },
   })
 
+  // ── Form submit ───────────────────────────────────────────────────────────────
+
+  const onSubmit = (values: DownloadFormValues) => {
+    const basePayload = {
+      url: values.url,
+      title: categoryType === 'movies' ? (selectedTmdb?.title || values.title) : values.title,
+      category_id: Number(values.category_id),
+      resolution: isYoutube ? values.resolution : 'auto' as DownloadResolution,
+      vpn_client_id: values.use_vpn && values.vpn_client_id ? Number(values.vpn_client_id) : null,
+    }
+
+    if (categoryType === 'series') {
+      createMutation.mutate({
+        ...basePayload,
+        category_type: 'series',
+        // TMDB dizi bilgileri
+        tmdb_id: selectedTmdbTv?.id ?? null,
+        tmdb_title: selectedTmdbTv?.title ?? null,
+        tmdb_overview: selectedTmdbTv?.overview ?? null,
+        tmdb_poster_url: selectedTmdbTv?.poster_url ?? null,
+        tmdb_backdrop_url: selectedTmdbTv?.backdrop_url ?? null,
+        tmdb_year: selectedTmdbTv?.first_air_year ?? null,
+        tmdb_rating: selectedTmdbTv?.rating ?? null,
+        series_id: Number(values.series_id) || null,
+        season_id: Number(values.season_id) || null,
+        episode_number: Number(values.episode_number) || null,
+      })
+    } else {
+      createMutation.mutate({
+        ...basePayload,
+        category_type: 'movies',
+        tmdb_id: selectedTmdb?.id ?? null,
+        tmdb_title: selectedTmdb?.title ?? null,
+        tmdb_overview: selectedTmdb?.overview ?? null,
+        tmdb_poster_url: selectedTmdb?.poster_url ?? null,
+        tmdb_backdrop_url: selectedTmdb?.backdrop_url ?? null,
+        tmdb_year: selectedTmdb?.release_year ?? null,
+        tmdb_rating: selectedTmdb?.rating ?? null,
+      })
+    }
+  }
+
+  // ── Computed values ───────────────────────────────────────────────────────────
+
   const summary = useMemo(() => {
     const items = downloadsQuery.data ?? []
     return {
@@ -181,6 +305,10 @@ export default function DownloadsPage() {
 
   const movieCategories = categoriesQuery.data ?? []
   const activeVpnClients = (vpnClientsQuery.data ?? []).filter((c: VpnClient) => c.is_active)
+  const seriesList: SeriesContent[] = seriesListQuery.data ?? []
+  const seasonsList: Season[] = seasonsQuery.data ?? []
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -209,26 +337,36 @@ export default function DownloadsPage() {
             <h3 className="text-lg font-semibold text-slate-900">Yeni indirme ekle</h3>
           </div>
 
-          <form
-            className="space-y-4"
-            onSubmit={handleSubmit((values) =>
-              createMutation.mutate({
-                url: values.url,
-                title: selectedTmdb?.title || values.title,
-                category_id: Number(values.category_id),
-                category_type: 'movies',
-                resolution: isYoutube ? values.resolution : 'auto',
-                tmdb_id: selectedTmdb?.id ?? null,
-                tmdb_title: selectedTmdb?.title ?? null,
-                tmdb_overview: selectedTmdb?.overview ?? null,
-                tmdb_poster_url: selectedTmdb?.poster_url ?? null,
-                tmdb_backdrop_url: selectedTmdb?.backdrop_url ?? null,
-                tmdb_year: selectedTmdb?.release_year ?? null,
-                tmdb_rating: selectedTmdb?.rating ?? null,
-                vpn_client_id: values.use_vpn && values.vpn_client_id ? Number(values.vpn_client_id) : null,
-              }),
-            )}
-          >
+          {/* Kategori tipi secici – Film / Dizi toggle */}
+          <div className="mb-5 flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              onClick={() => handleCategoryTypeChange('movies')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                categoryType === 'movies'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Film size={15} />
+              Film
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCategoryTypeChange('series')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                categoryType === 'series'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Tv size={15} />
+              Dizi Bolumu
+            </button>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+            {/* URL */}
             <div>
               <label className="panel-label">URL</label>
               <input
@@ -238,91 +376,242 @@ export default function DownloadsPage() {
               />
             </div>
 
-            <div className="relative" ref={dropdownRef}>
-              <label className="panel-label">Film adi</label>
-              <input
-                className="panel-input"
-                placeholder="Film adini yazin (TMDB otomatik arar)"
-                {...register('title', { required: true })}
-                onChange={(e) => {
-                  setValue('title', e.target.value)
-                  if (selectedTmdb) setSelectedTmdb(null)
-                  setDropdownOpen(true)
-                }}
-                autoComplete="off"
-              />
-              {tmdbSearchQuery.isFetching && (
-                <div className="pointer-events-none absolute right-3 top-[38px]">
-                  <LoaderCircle size={16} className="animate-spin text-slate-400" />
+            {/* ── FILM MODU ── */}
+            {categoryType === 'movies' && (
+              <>
+                {/* Film adi + TMDB dropdown */}
+                <div className="relative" ref={dropdownRef}>
+                  <label className="panel-label">Film adi</label>
+                  <input
+                    className="panel-input"
+                    placeholder="Film adini yazin (TMDB otomatik arar)"
+                    {...register('title', { required: true })}
+                    onChange={(e) => {
+                      setValue('title', e.target.value)
+                      if (selectedTmdb) setSelectedTmdb(null)
+                      setDropdownOpen(true)
+                    }}
+                    autoComplete="off"
+                  />
+                  {tmdbSearchQuery.isFetching && (
+                    <div className="pointer-events-none absolute right-3 top-[38px]">
+                      <LoaderCircle size={16} className="animate-spin text-slate-400" />
+                    </div>
+                  )}
+                  {dropdownOpen && (tmdbSearchQuery.data ?? []).length > 0 && !selectedTmdb && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+                      {(tmdbSearchQuery.data ?? []).map((movie) => (
+                        <button
+                          key={movie.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTmdb(movie)
+                            setValue('title', movie.title)
+                            setDropdownOpen(false)
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                        >
+                          <div className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-200">
+                            {movie.poster_url ? (
+                              <img src={movie.poster_url} alt={movie.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <Film size={14} className="text-slate-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-semibold text-slate-900">{movie.title}</div>
+                            <div className="text-xs text-slate-500">
+                              {movie.release_year ?? 'Yil yok'} &middot; {movie.rating?.toFixed(1) ?? '-'}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-              {dropdownOpen && (tmdbSearchQuery.data ?? []).length > 0 && !selectedTmdb && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
-                  {(tmdbSearchQuery.data ?? []).map((movie) => (
-                    <button
-                      key={movie.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTmdb(movie)
-                        setValue('title', movie.title)
-                        setDropdownOpen(false)
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
-                    >
-                      <div className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-200">
-                        {movie.poster_url ? (
-                          <img src={movie.poster_url} alt={movie.title} className="h-full w-full object-cover" />
+
+                {/* Secilen film onizleme */}
+                {selectedTmdb && (
+                  <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-24 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white">
+                        {selectedTmdb.poster_url ? (
+                          <img src={selectedTmdb.poster_url} alt={selectedTmdb.title} className="h-full w-full object-cover" />
                         ) : (
-                          <Film size={14} className="text-slate-500" />
+                          <Film size={18} className="text-slate-500" />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold text-slate-900">{movie.title}</div>
-                        <div className="text-xs text-slate-500">
-                          {movie.release_year ?? 'Yil yok'} &middot; {movie.rating?.toFixed(1) ?? '-'}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-base font-semibold text-slate-900">{selectedTmdb.title}</div>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedTmdb(null); setValue('title', '') }}
+                            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-emerald-100 hover:text-slate-600"
+                          >
+                            <XCircle size={16} />
+                          </button>
                         </div>
+                        <div className="mt-1 text-sm text-slate-600">
+                          {selectedTmdb.release_year ?? 'Yil yok'} - {selectedTmdb.rating?.toFixed(1) ?? 'Puan yok'}
+                        </div>
+                        <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{selectedTmdb.overview || 'Aciklama yok'}</div>
                       </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {selectedTmdb && (
-              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-24 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white">
-                    {selectedTmdb.poster_url ? (
-                      <img src={selectedTmdb.poster_url} alt={selectedTmdb.title} className="h-full w-full object-cover" />
-                    ) : (
-                      <Film size={18} className="text-slate-500" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-base font-semibold text-slate-900">{selectedTmdb.title}</div>
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedTmdb(null); setValue('title', '') }}
-                        className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-emerald-100 hover:text-slate-600"
-                      >
-                        <XCircle size={16} />
-                      </button>
                     </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      {selectedTmdb.release_year ?? 'Yil yok'} - {selectedTmdb.rating?.toFixed(1) ?? 'Puan yok'}
-                    </div>
-                    <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{selectedTmdb.overview || 'Aciklama yok'}</div>
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
 
+            {/* ── DiZi MODU ── */}
+            {categoryType === 'series' && (
+              <>
+                {/* Dizi secimi */}
+                <div>
+                  <label className="panel-label">Dizi</label>
+                  <select
+                    className="panel-select"
+                    {...register('series_id', { required: true, valueAsNumber: true })}
+                    onChange={(e) => {
+                      setValue('series_id', Number(e.target.value))
+                      setValue('season_id', 0)
+                    }}
+                  >
+                    <option value={0}>Dizi secin</option>
+                    {seriesList.map((s: SeriesContent) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                  {seriesListQuery.isLoading && <p className="mt-1 text-xs text-slate-400">Diziler yukleniyor...</p>}
+                </div>
+
+                {/* Sezon secimi – sadece dizi secilince goster */}
+                {Number(selectedSeriesId) > 0 && (
+                  <div>
+                    <label className="panel-label">Sezon</label>
+                    <select
+                      className="panel-select"
+                      {...register('season_id', { required: true, valueAsNumber: true })}
+                    >
+                      <option value={0}>Sezon secin</option>
+                      {seasonsList.map((season: Season) => (
+                        <option key={season.id} value={season.id}>
+                          Sezon {season.season_number}{season.title ? ` — ${season.title}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {seasonsQuery.isLoading && <p className="mt-1 text-xs text-slate-400">Sezonlar yukleniyor...</p>}
+                  </div>
+                )}
+
+                {/* Bolum numarasi */}
+                <div>
+                  <label className="panel-label">Bolum numarasi</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="panel-input"
+                    placeholder="Ornek: 1"
+                    {...register('episode_number', { required: true, valueAsNumber: true, min: 1 })}
+                  />
+                </div>
+
+                {/* Bolum basligi (title) + TMDB dizi arama */}
+                <div className="relative" ref={tvDropdownRef}>
+                  <label className="panel-label">Bolum basligi (opsiyonel, TMDB dizi arar)</label>
+                  <input
+                    className="panel-input"
+                    placeholder="Bolum adini yazin – TMDB'den dizi bilgisi alir"
+                    {...register('title')}
+                    onChange={(e) => {
+                      setValue('title', e.target.value)
+                      if (selectedTmdbTv) setSelectedTmdbTv(null)
+                      setTvDropdownOpen(true)
+                    }}
+                    autoComplete="off"
+                  />
+                  {tmdbTvSearchQuery.isFetching && (
+                    <div className="pointer-events-none absolute right-3 top-[38px]">
+                      <LoaderCircle size={16} className="animate-spin text-slate-400" />
+                    </div>
+                  )}
+                  {tvDropdownOpen && (tmdbTvSearchQuery.data ?? []).length > 0 && !selectedTmdbTv && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+                      {(tmdbTvSearchQuery.data ?? []).map((tv) => (
+                        <button
+                          key={tv.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTmdbTv(tv)
+                            setValue('title', tv.title)
+                            setTvDropdownOpen(false)
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                        >
+                          <div className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-200">
+                            {tv.poster_url ? (
+                              <img src={tv.poster_url} alt={tv.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <Tv size={14} className="text-slate-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-semibold text-slate-900">{tv.title}</div>
+                            <div className="text-xs text-slate-500">
+                              {tv.first_air_year ?? 'Yil yok'} &middot; {tv.rating?.toFixed(1) ?? '-'}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Secilen TMDB dizi onizleme */}
+                {selectedTmdbTv && (
+                  <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-24 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white">
+                        {selectedTmdbTv.poster_url ? (
+                          <img src={selectedTmdbTv.poster_url} alt={selectedTmdbTv.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <Tv size={18} className="text-slate-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-base font-semibold text-slate-900">{selectedTmdbTv.title}</div>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedTmdbTv(null); setValue('title', '') }}
+                            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-blue-100 hover:text-slate-600"
+                          >
+                            <XCircle size={16} />
+                          </button>
+                        </div>
+                        <div className="mt-1 text-sm text-slate-600">
+                          {selectedTmdbTv.first_air_year ?? 'Yil yok'} - {selectedTmdbTv.rating?.toFixed(1) ?? 'Puan yok'}
+                        </div>
+                        <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{selectedTmdbTv.overview || 'Aciklama yok'}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Kategori secimi + Cozunurluk (ortak) */}
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="panel-label">Kategori</label>
+                <label className="panel-label">
+                  {categoryType === 'series' ? 'Film kategorisi (depolama icin)' : 'Kategori'}
+                </label>
                 <select className="panel-select" {...register('category_id', { valueAsNumber: true, required: true })}>
-                  <option value={0}>Movie kategorisi secin</option>
+                  <option value={0}>
+                    {categoryType === 'series' ? 'Kategori secin (dosya yolu)' : 'Movie kategorisi secin'}
+                  </option>
                   {movieCategories.map((category: Category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -344,6 +633,7 @@ export default function DownloadsPage() {
               )}
             </div>
 
+            {/* VPN – sadece YouTube linklerinde */}
             {isYoutube && (
               <div className="space-y-3">
                 <label className="flex cursor-pointer items-center gap-3">
@@ -382,6 +672,7 @@ export default function DownloadsPage() {
           </form>
         </div>
 
+        {/* Indirme kuyrugu listesi */}
         <div className="glass-panel p-5">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
@@ -421,6 +712,8 @@ export default function DownloadsPage() {
                     <div className="flex h-20 w-14 items-center justify-center overflow-hidden rounded-2xl bg-slate-100">
                       {item.tmdb_poster_url ? (
                         <img src={item.tmdb_poster_url} alt={item.title} className="h-full w-full object-cover" />
+                      ) : item.category_type === 'series' ? (
+                        <Tv size={18} className="text-slate-500" />
                       ) : (
                         <Film size={18} className="text-slate-500" />
                       )}
@@ -434,6 +727,12 @@ export default function DownloadsPage() {
                           {item.status === 'downloading' && <LoaderCircle size={12} className="mr-1 inline animate-spin" />}
                           {statusLabels[item.status]}
                         </span>
+                        {/* Dizi rozeti */}
+                        {item.category_type === 'series' && (
+                          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                            Dizi{item.episode_number ? ` B${item.episode_number}` : ''}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-500">
                         <span>Kategori: {item.category_name || '-'}</span>
@@ -520,7 +819,7 @@ export default function DownloadsPage() {
         </div>
       </section>
 
-      {/* Clear Queue Confirm Dialog */}
+      {/* Kuyrugu temizle onay diyalogu */}
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">

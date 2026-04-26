@@ -6,6 +6,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.modules.openvpn.models import VpnClient  # noqa: F401  — FK resolution
+from app.modules.content.models import SeriesContent, SeriesSeason  # noqa: F401  — FK resolution icin
 
 
 class DownloadSourceType(str, enum.Enum):
@@ -52,5 +53,10 @@ class DownloadQueue(Base):
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Dizi indirmesi icin ek kolonlar
+    series_id = Column(Integer, ForeignKey("series_contents.id", ondelete="SET NULL"), nullable=True, index=True)
+    season_id = Column(Integer, ForeignKey("series_seasons.id", ondelete="SET NULL"), nullable=True, index=True)
+    episode_number = Column(Integer, nullable=True)
 
     category = relationship("MovieCategory")

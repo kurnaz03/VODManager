@@ -13,7 +13,8 @@ class DownloadBasePayload(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     url: HttpUrl
     category_id: int = Field(ge=1)
-    category_type: Literal["movies"] = "movies"
+    # 'movies' veya 'series' – varsayilan film indirmesi
+    category_type: Literal["movies", "series"] = "movies"
     tmdb_id: int | None = Field(default=None, ge=1)
     tmdb_title: str | None = Field(default=None, max_length=255)
     tmdb_overview: str | None = Field(default=None, max_length=5000)
@@ -23,6 +24,10 @@ class DownloadBasePayload(BaseModel):
     tmdb_rating: float | None = Field(default=None, ge=0, le=10)
     resolution: DownloadResolutionLiteral = "auto"
     vpn_client_id: int | None = Field(default=None, ge=1)
+    # Dizi indirmesi icin ek alanlar – sadece category_type='series' oldugunda kullanilir
+    series_id: int | None = Field(default=None, ge=1)
+    season_id: int | None = Field(default=None, ge=1)
+    episode_number: int | None = Field(default=None, ge=1)
 
 
 class DownloadCreate(DownloadBasePayload):
@@ -67,6 +72,10 @@ class DownloadResponse(BaseModel):
     eta_seconds: int | None
     error_message: str | None
     vpn_client_id: int | None
+    # Dizi indirmesine ait ek alanlar
+    series_id: int | None
+    season_id: int | None
+    episode_number: int | None
     created_by: int | None
     created_at: datetime
     updated_at: datetime | None

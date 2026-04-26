@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import decrypt_secret
-from app.modules.content.models import MovieCategory, MovieContent
+from app.modules.content.models import MovieCategory, MovieContent, SeriesContent, SeriesSeason, SeriesEpisode
 from app.modules.downloads.models import DownloadQueue, DownloadSourceType, DownloadStatus
 from app.modules.downloads.schemas import DownloadCreate, DownloadSettingsUpdate, DownloadUpdate
 from app.modules.users.models import SystemSetting
@@ -79,6 +79,10 @@ def _serialize_download(item: DownloadQueue) -> dict:
         "eta_seconds": item.eta_seconds,
         "error_message": item.error_message,
         "vpn_client_id": item.vpn_client_id,
+        # Dizi indirmesi alanlari
+        "series_id": item.series_id,
+        "season_id": item.season_id,
+        "episode_number": item.episode_number,
         "created_by": item.created_by,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
@@ -90,6 +94,17 @@ def _ensure_movie_category(db: Session, category_id: int) -> MovieCategory:
     if category is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Movie kategorisi bulunamadi")
     return category
+
+
+def _ensure_series_season(db: Session, series_id: int, season_id: int) -> SeriesSeason:
+    """Dizi indirmesi icin series ve season varligi kontrol eder."""
+    series = db.query(SeriesContent).filter(SeriesContent.id == series_id).first()
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dizi bulunamadi")
+    season = db.query(SeriesSeason).filter(SeriesSeason.id == season_id, SeriesSeason.series_id == series_id).first()
+    if season is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sezon bulunamadi")
+    return season
 
 
 def _detect_source_type(url: str) -> DownloadSourceType:
@@ -107,7 +122,19 @@ def _get_next_file_number(db: Session) -> int:
 
 
 def create_download(db: Session, payload: DownloadCreate, created_by: int | None) -> dict:
-    _ensure_movie_category(db, payload.category_id)
+    # category_type'a gore validasyon: film ise movie_category kontrol, dizi ise series/season kontrol
+    if payload.category_type == "series":
+        if not payload.series_id or not payload.season_id or not payload.episode_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dizi indirmesi icin series_id, season_id ve episode_number zorunludur",
+            )
+        _ensure_series_season(db, payload.series_id, payload.season_id)
+        # Dizi indirmelerinde category_id hala film kategorisi olarak kullaniliyor (dosya yolu icin)
+        _ensure_movie_category(db, payload.category_id)
+    else:
+        _ensure_movie_category(db, payload.category_id)
+
     source_type = _detect_source_type(str(payload.url))
     item = DownloadQueue(
         title=payload.title.strip(),
@@ -126,6 +153,10 @@ def create_download(db: Session, payload: DownloadCreate, created_by: int | None
         file_number=_get_next_file_number(db),
         status=DownloadStatus.queued,
         vpn_client_id=payload.vpn_client_id,
+        # Dizi alanlari – sadece category_type='series' oldugunda dolu gelir
+        series_id=payload.series_id if payload.category_type == "series" else None,
+        season_id=payload.season_id if payload.category_type == "series" else None,
+        episode_number=payload.episode_number if payload.category_type == "series" else None,
         created_by=created_by,
     )
     db.add(item)
@@ -562,7 +593,7 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
     db.add(item)
     db.commit()
 
-    # Auto-add to MovieContent if category_type is 'movies'
+    # Film indirmesi: MovieContent olarak kaydet
     if item.category_type == "movies":
         existing = db.query(MovieContent).filter(MovieContent.download_queue_id == item.id).first()
         if existing is None:
@@ -584,6 +615,35 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
             )
             db.add(movie)
             db.commit()
+
+    # Dizi indirmesi: SeriesEpisode olarak kaydet veya guncelle
+    elif item.category_type == "series" and item.season_id and item.episode_number:
+        existing_ep = (
+            db.query(SeriesEpisode)
+            .filter(
+                SeriesEpisode.season_id == item.season_id,
+                SeriesEpisode.episode_number == item.episode_number,
+            )
+            .first()
+        )
+        if existing_ep:
+            # Mevcut bolumu guncelle – dosya yolunu ve kaynak URL'i yaz
+            existing_ep.file_path = item.file_path
+            existing_ep.source_url = item.url
+            if item.title:
+                existing_ep.title = item.tmdb_title or item.title
+            db.add(existing_ep)
+        else:
+            # Yeni bolum olustur
+            episode = SeriesEpisode(
+                season_id=item.season_id,
+                episode_number=item.episode_number,
+                title=item.tmdb_title or item.title,
+                file_path=item.file_path,
+                source_url=item.url,
+            )
+            db.add(episode)
+        db.commit()
 
 
 def process_download(download_id: int) -> None:

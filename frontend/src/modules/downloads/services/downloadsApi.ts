@@ -28,6 +28,10 @@ export interface DownloadItem {
   speed_mbps: number | null
   eta_seconds: number | null
   error_message: string | null
+  // Dizi indirmesi alanlari
+  series_id: number | null
+  season_id: number | null
+  episode_number: number | null
   created_by: number | null
   created_at: string
   updated_at: string | null
@@ -37,7 +41,8 @@ export interface DownloadCreatePayload {
   title: string
   url: string
   category_id: number
-  category_type: 'movies'
+  // 'movies' veya 'series' – default movies
+  category_type: 'movies' | 'series'
   tmdb_id?: number | null
   tmdb_title?: string | null
   tmdb_overview?: string | null
@@ -47,6 +52,10 @@ export interface DownloadCreatePayload {
   tmdb_rating?: number | null
   resolution: DownloadResolution
   vpn_client_id?: number | null
+  // Dizi indirmesi icin ek alanlar – sadece category_type='series' oldugunda gonderilir
+  series_id?: number | null
+  season_id?: number | null
+  episode_number?: number | null
 }
 
 export interface TmdbMovie {
