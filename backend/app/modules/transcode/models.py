@@ -105,7 +105,7 @@ class TranscodeJob(Base):
     output_file_path = Column(String(1000), nullable=True)
     unique_number = Column(Integer, nullable=False, unique=True, index=True)
 
-    # Overlay text
+    # Overlay yazisi
     overlay_text = Column(String(500), nullable=True)
     text_position = Column(String(20), nullable=False, default="bottom-right")
     text_size = Column(Integer, nullable=False, default=24)
@@ -113,7 +113,22 @@ class TranscodeJob(Base):
     text_bg_enabled = Column(Boolean, nullable=False, default=False)
     text_bg_color = Column(String(10), nullable=False, default="#000000")
 
-    # Countdown
+    # Yazi kenar boslugu (padding) - ust ve alt
+    text_padding_top = Column(Integer, nullable=False, default=0)
+    text_padding_bottom = Column(Integer, nullable=False, default=0)
+
+    # Yazi gorunme/kaybolma efekti (fade in/out)
+    text_fade_enabled = Column(Boolean, nullable=False, default=False)
+    # Kac saniyede bir kaybolma dongusu baslar (ornek 600 = 10 dakika)
+    text_fade_interval = Column(Integer, nullable=False, default=600)
+    # Kac saniye gizli kalacak
+    text_fade_duration = Column(Integer, nullable=False, default=20)
+    # Tekrar belirme suresi (saniye) - alpha 0'dan 1'e
+    text_fade_in_time = Column(Integer, nullable=False, default=3)
+    # Kaybolma suresi (saniye) - alpha 1'den 0'a
+    text_fade_out_time = Column(Integer, nullable=False, default=3)
+
+    # Geri sayim
     countdown_enabled = Column(Boolean, nullable=False, default=False)
     countdown_position = Column(String(20), nullable=False, default="top-right")
 

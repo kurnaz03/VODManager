@@ -175,6 +175,16 @@ export default function TranscodeJobsPage() {
   const [textColor, setTextColor] = useState('#FFFFFF')
   const [textBgEnabled, setTextBgEnabled] = useState(false)
   const [textBgColor, setTextBgColor] = useState('#000000')
+  // Yazi kenar boslugu (padding)
+  const [textPaddingTop, setTextPaddingTop] = useState(0)
+  const [textPaddingBottom, setTextPaddingBottom] = useState(0)
+  // Yazi fade in/out efekti
+  const [textFadeEnabled, setTextFadeEnabled] = useState(false)
+  // Interval dakika cinsinden gosterilir, backend'e saniye gonderilir
+  const [textFadeIntervalMin, setTextFadeIntervalMin] = useState(10)
+  const [textFadeDuration, setTextFadeDuration] = useState(20)
+  const [textFadeInTime, setTextFadeInTime] = useState(3)
+  const [textFadeOutTime, setTextFadeOutTime] = useState(3)
   const [countdownEnabled, setCountdownEnabled] = useState(false)
   const [countdownPosition, setCountdownPosition] = useState('top-right')
 
@@ -341,6 +351,15 @@ export default function TranscodeJobsPage() {
       text_color: textColor,
       text_bg_enabled: textBgEnabled,
       text_bg_color: textBgColor,
+      // Yazi kenar boslugu (padding) - saniye cinsinden
+      text_padding_top: textPaddingTop,
+      text_padding_bottom: textPaddingBottom,
+      // Yazi fade efekti - interval dakikadan saniyeye cevriliyor
+      text_fade_enabled: textFadeEnabled,
+      text_fade_interval: textFadeIntervalMin * 60,
+      text_fade_duration: textFadeDuration,
+      text_fade_in_time: textFadeInTime,
+      text_fade_out_time: textFadeOutTime,
       countdown_enabled: countdownEnabled,
       countdown_position: countdownPosition,
     }
@@ -560,6 +579,100 @@ export default function TranscodeJobsPage() {
                           onChange={(e) => setTextBgColor(e.target.value)}
                         />
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Yazi kenar boslugu (padding) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600">Ust Kenar Boslugu (px)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={200}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                      value={textPaddingTop}
+                      onChange={(e) => setTextPaddingTop(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600">Alt Kenar Boslugu (px)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={200}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                      value={textPaddingBottom}
+                      onChange={(e) => setTextPaddingBottom(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Yazi gorunme/kaybolma efekti (fade in/out) */}
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-600">Yazi Efekti (Fade In/Out)</span>
+                    <button
+                      type="button"
+                      onClick={() => setTextFadeEnabled((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${textFadeEnabled ? 'bg-blue-500' : 'bg-slate-200'}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${textFadeEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                      />
+                    </button>
+                  </div>
+                  <div className={`space-y-3 ${!textFadeEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Kac dakikada bir</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={120}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                          value={textFadeIntervalMin}
+                          onChange={(e) => setTextFadeIntervalMin(Number(e.target.value))}
+                        />
+                        <p className="mt-0.5 text-xs text-slate-400">Dakika (ornek: 10 = 10dk)</p>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Kac saniye gizlenecek</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={300}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                          value={textFadeDuration}
+                          onChange={(e) => setTextFadeDuration(Number(e.target.value))}
+                        />
+                        <p className="mt-0.5 text-xs text-slate-400">Saniye</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Belirme suresi (sn)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                          value={textFadeInTime}
+                          onChange={(e) => setTextFadeInTime(Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Kaybolma suresi (sn)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                          value={textFadeOutTime}
+                          onChange={(e) => setTextFadeOutTime(Number(e.target.value))}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -61,13 +61,14 @@ def _get_video_duration(file_path: str) -> float | None:
 # ----- Filter builders -------------------------------------------------------
 
 _TEXT_POS_MAP = {
-    "top-left": ("10", "10"),
-    "top-right": ("w-tw-10", "10"),
-    "bottom-left": ("10", "h-th-10"),
-    "bottom-right": ("w-tw-10", "h-th-10"),
-    "center": ("(w-tw)/2", "(h-th)/2"),
-    "center-bottom": ("(w-tw)/2", "h-th-10"),
-    "center-top": ("(w-tw)/2", "10"),
+    # (x_expr, y_expr, konum_tipi) - konum_tipi: "top" veya "bottom"
+    "top-left":     ("10",         "10",        "top"),
+    "top-right":    ("w-tw-10",    "10",        "top"),
+    "bottom-left":  ("10",         "h-th-10",   "bottom"),
+    "bottom-right": ("w-tw-10",    "h-th-10",   "bottom"),
+    "center":       ("(w-tw)/2",   "(h-th)/2",  "mid"),
+    "center-bottom":("(w-tw)/2",   "h-th-10",   "bottom"),
+    "center-top":   ("(w-tw)/2",   "10",        "top"),
 }
 
 _COUNTDOWN_POS_MAP = {
@@ -85,14 +86,69 @@ def _drawtext_filter(
     color: str,
     bg_enabled: bool,
     bg_color: str,
+    padding_top: int = 0,
+    padding_bottom: int = 0,
+    fade_enabled: bool = False,
+    fade_interval: int = 600,
+    fade_duration: int = 20,
+    fade_in_time: int = 3,
+    fade_out_time: int = 3,
 ) -> str:
+    """FFmpeg drawtext filtresi olusturur.
+
+    Padding degerleri:
+    - top pozisyonlar: y degerine padding_top eklenir
+    - bottom pozisyonlar: y degerinden padding_bottom cikarilir
+
+    Fade efekti:
+    - Her fade_interval saniyede bir, fade_duration saniye boyunca yazi gizlenir
+    - Kaybolurken fade_out_time saniyede soluklaşır (alpha 1->0)
+    - Geri gelirken fade_in_time saniyede belirir (alpha 0->1)
+    """
     escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:")
     hex_color = color.lstrip("#")
-    x, y = _TEXT_POS_MAP.get(position, ("w-tw-10", "h-th-10"))
+    pos_data = _TEXT_POS_MAP.get(position, ("w-tw-10", "h-th-10", "bottom"))
+    x, y_base, pos_type = pos_data[0], pos_data[1], pos_data[2]
+
+    # Padding'e gore y koordinatini ayarla
+    if pos_type == "top" and padding_top > 0:
+        y = f"{y_base}+{padding_top}"
+    elif pos_type == "bottom" and padding_bottom > 0:
+        y = f"{y_base}-{padding_bottom}"
+    else:
+        y = y_base
+
     dt = f"drawtext=text='{escaped}':fontsize={size}:fontcolor=0x{hex_color}FF:x={x}:y={y}"
+
     if bg_enabled:
         bg_hex = bg_color.lstrip("#")
         dt += f":box=1:boxcolor=0x{bg_hex}B3:boxborderw=5"
+
+    # Fade in/out alpha expression ekle
+    if fade_enabled:
+        # Gorunur kalma suresi = toplam dongu - gizli kalma suresi
+        visible_time = fade_interval - fade_duration
+        # Negatif olmasin
+        if visible_time < 1:
+            visible_time = 1
+        # FFmpeg alpha ifadesi:
+        # mod(t, INTERVAL) < VISIBLE_TIME => gorunur (alpha=1)
+        # VISIBLE_TIME <= mod(t, INTERVAL) < VISIBLE_TIME+FADE_OUT => kayboluyor (alpha azaliyor)
+        # VISIBLE_TIME+FADE_OUT <= mod(t, INTERVAL) < INTERVAL-FADE_IN => tamamen gizli (alpha=0)
+        # INTERVAL-FADE_IN <= mod(t, INTERVAL) => beliriyor (alpha artiyor)
+        alpha_expr = (
+            f"if(lt(mod(t\\,{fade_interval})\\,{visible_time})\\,"
+            f"1\\,"
+            f"if(lt(mod(t\\,{fade_interval})-{visible_time}\\,{fade_out_time})\\,"
+            f"({fade_out_time}-(mod(t\\,{fade_interval})-{visible_time}))"
+            f"/{fade_out_time}\\,"
+            f"if(gt(mod(t\\,{fade_interval})\\,{fade_interval}-{fade_in_time})\\,"
+            f"(mod(t\\,{fade_interval})-({fade_interval}-{fade_in_time}))"
+            f"/{fade_in_time}\\,"
+            f"0)))"
+        )
+        dt += f":alpha='{alpha_expr}'"
+
     return dt
 
 
@@ -219,11 +275,18 @@ def build_ffmpeg_cmd(
         parts.append(f"{base}{logo_in}overlay={pos}[overlaid]")
         base = "[overlaid]"
 
-        # Text overlay
+        # Yazi overlay - padding ve fade parametreleriyle
         if job.overlay_text:
             tf = _drawtext_filter(
                 job.overlay_text, job.text_position, job.text_size,
-                job.text_color, job.text_bg_enabled, job.text_bg_color
+                job.text_color, job.text_bg_enabled, job.text_bg_color,
+                padding_top=getattr(job, "text_padding_top", 0) or 0,
+                padding_bottom=getattr(job, "text_padding_bottom", 0) or 0,
+                fade_enabled=getattr(job, "text_fade_enabled", False) or False,
+                fade_interval=getattr(job, "text_fade_interval", 600) or 600,
+                fade_duration=getattr(job, "text_fade_duration", 20) or 20,
+                fade_in_time=getattr(job, "text_fade_in_time", 3) or 3,
+                fade_out_time=getattr(job, "text_fade_out_time", 3) or 3,
             )
             parts.append(f"{base}{tf}[texted]")
             base = "[texted]"
@@ -260,10 +323,18 @@ def build_ffmpeg_cmd(
             alg = profile.scaling_algorithm or "lanczos"
             vf_parts.append(f"scale={w}:{h}:flags={alg}")
 
+        # Yazi overlay (logo yok) - padding ve fade parametreleriyle
         if job.overlay_text:
             vf_parts.append(_drawtext_filter(
                 job.overlay_text, job.text_position, job.text_size,
-                job.text_color, job.text_bg_enabled, job.text_bg_color
+                job.text_color, job.text_bg_enabled, job.text_bg_color,
+                padding_top=getattr(job, "text_padding_top", 0) or 0,
+                padding_bottom=getattr(job, "text_padding_bottom", 0) or 0,
+                fade_enabled=getattr(job, "text_fade_enabled", False) or False,
+                fade_interval=getattr(job, "text_fade_interval", 600) or 600,
+                fade_duration=getattr(job, "text_fade_duration", 20) or 20,
+                fade_in_time=getattr(job, "text_fade_in_time", 3) or 3,
+                fade_out_time=getattr(job, "text_fade_out_time", 3) or 3,
             ))
 
         if job.countdown_enabled and duration:
@@ -411,6 +482,15 @@ def _serialize_job(job: TranscodeJob) -> dict[str, Any]:
         "text_color": job.text_color,
         "text_bg_enabled": job.text_bg_enabled,
         "text_bg_color": job.text_bg_color,
+        # Yazi kenar boslugu (padding)
+        "text_padding_top": getattr(job, "text_padding_top", 0) or 0,
+        "text_padding_bottom": getattr(job, "text_padding_bottom", 0) or 0,
+        # Yazi fade in/out efekti
+        "text_fade_enabled": getattr(job, "text_fade_enabled", False) or False,
+        "text_fade_interval": getattr(job, "text_fade_interval", 600) or 600,
+        "text_fade_duration": getattr(job, "text_fade_duration", 20) or 20,
+        "text_fade_in_time": getattr(job, "text_fade_in_time", 3) or 3,
+        "text_fade_out_time": getattr(job, "text_fade_out_time", 3) or 3,
         "countdown_enabled": job.countdown_enabled,
         "countdown_position": job.countdown_position,
         "status": job.status,
@@ -475,6 +555,15 @@ def create_job(db: Session, payload: TranscodeJobCreate) -> dict[str, Any]:
         text_color=payload.text_color,
         text_bg_enabled=payload.text_bg_enabled,
         text_bg_color=payload.text_bg_color,
+        # Yazi kenar boslugu
+        text_padding_top=payload.text_padding_top,
+        text_padding_bottom=payload.text_padding_bottom,
+        # Yazi fade efekti
+        text_fade_enabled=payload.text_fade_enabled,
+        text_fade_interval=payload.text_fade_interval,
+        text_fade_duration=payload.text_fade_duration,
+        text_fade_in_time=payload.text_fade_in_time,
+        text_fade_out_time=payload.text_fade_out_time,
         countdown_enabled=payload.countdown_enabled,
         countdown_position=payload.countdown_position,
         status="queued",

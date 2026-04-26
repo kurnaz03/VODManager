@@ -18,6 +18,15 @@ export interface TranscodeJob {
   text_color: string
   text_bg_enabled: boolean
   text_bg_color: string
+  // Yazi kenar boslugu (padding)
+  text_padding_top: number
+  text_padding_bottom: number
+  // Yazi fade in/out efekti
+  text_fade_enabled: boolean
+  text_fade_interval: number
+  text_fade_duration: number
+  text_fade_in_time: number
+  text_fade_out_time: number
   countdown_enabled: boolean
   countdown_position: string
   status: string
@@ -40,6 +49,15 @@ export interface TranscodeJobCreate {
   text_color?: string
   text_bg_enabled?: boolean
   text_bg_color?: string
+  // Yazi kenar boslugu (padding)
+  text_padding_top?: number
+  text_padding_bottom?: number
+  // Yazi fade in/out efekti
+  text_fade_enabled?: boolean
+  text_fade_interval?: number
+  text_fade_duration?: number
+  text_fade_in_time?: number
+  text_fade_out_time?: number
   countdown_enabled?: boolean
   countdown_position?: string
 }
