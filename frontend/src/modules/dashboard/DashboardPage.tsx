@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Clapperboard,
@@ -161,6 +162,7 @@ function LiveBadge() {
 
 export default function DashboardPage() {
   const [uptimeTick, setUptimeTick] = useState(0)
+  const navigate = useNavigate()
 
   const dashboardQuery = useQuery({
     queryKey: ['dashboard-summary'],
@@ -363,14 +365,16 @@ export default function DashboardPage() {
 
         {/* Bugunun Dizileri */}
         <div className="glass-panel p-6 flex flex-col">
-          <div className="mb-4 flex items-center justify-between flex-shrink-0">
-            <div>
-              <h3 className="text-xl font-semibold text-slate-900">Bugunun Dizileri</h3>
-              <p className="mt-1 text-sm text-slate-500">Bugun yayinlanacak diziler</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-2xl bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
-              <Film size={13} />
-              {todaySeries.length} dizi
+          <div className="mb-4 flex-shrink-0">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">Bugunun Dizileri</h3>
+                <p className="mt-1 text-sm text-slate-500">Bugun yayinlanacak diziler</p>
+              </div>
+              <div className="flex items-center gap-2 rounded-2xl bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
+                <Film size={13} />
+                {todaySeries.length} dizi
+              </div>
             </div>
           </div>
 
@@ -386,23 +390,30 @@ export default function DashboardPage() {
           ) : (
             <div className="flex-1 overflow-y-auto space-y-3 pr-1" style={{ maxHeight: '420px' }}>
               {todaySeries.map((s) => (
-                <a
+                <div
                   key={s.id}
-                  href="/content/series"
                   className="flex gap-4 rounded-2xl border border-slate-100 bg-white p-3 hover:bg-blue-50/50 hover:border-blue-100 transition-colors group"
                 >
-                  <div className="flex-shrink-0 w-[70px] h-[105px] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                  <button
+                    type="button"
+                    className="flex-shrink-0 w-[70px] h-[105px] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center"
+                    onClick={() => navigate('/series', { state: { seriesId: s.id } })}
+                  >
                     {s.poster_url ? (
                       <img src={s.poster_url} alt={s.title} className="h-full w-full object-cover" />
                     ) : (
                       <Film size={20} className="text-slate-300" />
                     )}
-                  </div>
+                  </button>
                   <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900 leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-slate-900 leading-snug group-hover:text-blue-600 transition-colors line-clamp-2 text-left"
+                        onClick={() => navigate('/series', { state: { seriesId: s.id } })}
+                      >
                         {s.title}
-                      </p>
+                      </button>
                       {s.broadcast_day && (
                         <p className="mt-1 text-xs text-slate-400">{s.broadcast_day}</p>
                       )}
@@ -425,7 +436,7 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                </a>
+                </div>
               ))}
             </div>
           )}
@@ -518,6 +529,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
     </div>
   )
 }

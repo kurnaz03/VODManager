@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
@@ -36,6 +37,7 @@ type View = 'series' | 'seasons' | 'episodes'
 
 export default function SeriesPage() {
   const queryClient = useQueryClient()
+  const location = useLocation()
   const [view, setView] = useState<View>('series')
   const [selectedSeries, setSelectedSeries] = useState<SeriesContent | null>(null)
   const [selectedSeason, setSelectedSeason] = useState<Season | null>(null)
@@ -44,6 +46,23 @@ export default function SeriesPage() {
   const [showAddEpisode, setShowAddEpisode] = useState(false)
   const [editEpisode, setEditEpisode] = useState<Episode | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: number } | null>(null)
+
+  // Series filter state
+  const [dayFilter, setDayFilter] = useState('')
+  const [channelFilter, setChannelFilter] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Edit series state
+  const [editSeries, setEditSeries] = useState<SeriesContent | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editBroadcastDay, setEditBroadcastDay] = useState('')
+  const [editBroadcastChannel, setEditBroadcastChannel] = useState('')
+  const [editChannelLogoUrl, setEditChannelLogoUrl] = useState('')
+  const [editPosterUrl, setEditPosterUrl] = useState('')
+  const [editBackdropUrl, setEditBackdropUrl] = useState('')
+  const [editReleaseYear, setEditReleaseYear] = useState('')
+  const [editRating, setEditRating] = useState('')
   const [tmdbImportResult, setTmdbImportResult] = useState<string | null>(null)
   const [showTmdbImportConfirm, setShowTmdbImportConfirm] = useState(false)
   const [pendingTmdbSeasons, setPendingTmdbSeasons] = useState<TmdbSeason[] | null>(null)
@@ -79,6 +98,15 @@ export default function SeriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['series'] })
       setDeleteTarget(null)
+    },
+  })
+
+  const updateSeriesMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<SeriesContentCreate> }) =>
+      seriesApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['series'] })
+      setEditSeries(null)
     },
   })
 
@@ -185,6 +213,32 @@ export default function SeriesPage() {
   const seriesList: SeriesContent[] = seriesQuery.data ?? []
   const seasons: Season[] = seasonsQuery.data ?? []
   const episodes: Episode[] = episodesQuery.data ?? []
+
+  // Filter derived values
+  const uniqueChannels = Array.from(
+    new Set(seriesList.map((s) => s.broadcast_channel).filter(Boolean))
+  ) as string[]
+
+  const filteredSeriesList = seriesList.filter((s) => {
+    if (dayFilter && s.broadcast_day !== dayFilter) return false
+    if (channelFilter && s.broadcast_channel !== channelFilter) return false
+    if (searchQuery && !s.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
+
+  // Auto-navigate to series detail when coming from dashboard
+  useEffect(() => {
+    const state = location.state as { seriesId?: number } | null
+    if (state?.seriesId && seriesQuery.data) {
+      const found = seriesQuery.data.find((s) => s.id === state.seriesId)
+      if (found) {
+        setSelectedSeries(found)
+        setView('seasons')
+        // Clear state so navigating back works clean
+        window.history.replaceState({}, '')
+      }
+    }
+  }, [location.state, seriesQuery.data])
 
   function goBack() {
     if (view === 'episodes') { setView('seasons'); setSelectedSeason(null) }
@@ -300,7 +354,43 @@ export default function SeriesPage() {
       <section className="glass-panel p-4 sm:p-6">
         {/* Series view */}
         {view === 'series' && (
-          <div className="table-shell overflow-x-auto">
+          <div>
+            {/* Filter row */}
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[180px]"
+                placeholder="Dizi ara..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <select
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                value={dayFilter}
+                onChange={(e) => setDayFilter(e.target.value)}
+              >
+                <option value="">Tum Gunler</option>
+                {BROADCAST_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+              >
+                <option value="">Tum Kanallar</option>
+                {uniqueChannels.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+              </select>
+              {(dayFilter || channelFilter || searchQuery) && (
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+                  onClick={() => { setDayFilter(''); setChannelFilter(''); setSearchQuery('') }}
+                >
+                  Temizle
+                </button>
+              )}
+            </div>
+            <div className="table-shell overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-head text-left">
@@ -315,7 +405,7 @@ export default function SeriesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {seriesList.map((s) => (
+                {filteredSeriesList.map((s) => (
                   <tr
                     key={s.id}
                     className="table-zebra cursor-pointer hover:bg-slate-50"
@@ -344,21 +434,44 @@ export default function SeriesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{s.category_name ?? '-'}</td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="danger-button px-3 py-2"
-                        onClick={() => setDeleteTarget({ type: 'series', id: s.id })}
-                      >
-                        <Trash2 size={14} /> Sil
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-1"
+                          onClick={() => {
+                            setEditSeries(s)
+                            setEditTitle(s.title)
+                            setEditDescription(s.description ?? '')
+                            setEditBroadcastDay(s.broadcast_day ?? '')
+                            setEditBroadcastChannel(s.broadcast_channel ?? '')
+                            setEditChannelLogoUrl(s.channel_logo_url ?? '')
+                            setEditPosterUrl(s.poster_url ?? '')
+                            setEditBackdropUrl(s.backdrop_url ?? '')
+                            setEditReleaseYear(s.release_year != null ? String(s.release_year) : '')
+                            setEditRating(s.rating != null ? String(s.rating) : '')
+                          }}
+                        >
+                          <Edit2 size={13} /> Duzenle
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button px-2 py-1.5 text-xs"
+                          onClick={() => setDeleteTarget({ type: 'series', id: s.id })}
+                        >
+                          <Trash2 size={13} /> Sil
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {seriesList.length === 0 && !seriesQuery.isLoading && (
-                  <tr><td colSpan={8} className="px-6 py-16 text-center text-sm text-slate-500">Dizi bulunamadi.</td></tr>
+                {filteredSeriesList.length === 0 && !seriesQuery.isLoading && (
+                  <tr><td colSpan={8} className="px-6 py-16 text-center text-sm text-slate-500">
+                    {seriesList.length === 0 ? 'Dizi bulunamadi.' : 'Filtreye uyan dizi yok.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
@@ -555,6 +668,90 @@ export default function SeriesPage() {
                 <Check size={16} /> Devam Et
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Series Modal */}
+      {editSeries && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl overflow-y-auto" style={{ maxHeight: '90vh' }}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Dizi Duzenle</h3>
+              <button type="button" onClick={() => setEditSeries(null)}><X size={20} /></button>
+            </div>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                updateSeriesMutation.mutate({
+                  id: editSeries.id,
+                  payload: {
+                    title: editTitle,
+                    description: editDescription || null,
+                    broadcast_day: editBroadcastDay || null,
+                    broadcast_channel: editBroadcastChannel || null,
+                    channel_logo_url: editChannelLogoUrl || null,
+                    poster_url: editPosterUrl || null,
+                    backdrop_url: editBackdropUrl || null,
+                    release_year: editReleaseYear ? Number(editReleaseYear) : null,
+                    rating: editRating ? parseFloat(editRating) : null,
+                  },
+                })
+              }}
+            >
+              <div>
+                <label className="panel-label">Dizi Adi</label>
+                <input className="panel-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+              </div>
+              <div>
+                <label className="panel-label">Aciklama</label>
+                <textarea className="panel-input" rows={3} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="panel-label">Yayin Gunu</label>
+                  <select className="panel-input" value={editBroadcastDay} onChange={(e) => setEditBroadcastDay(e.target.value)}>
+                    <option value="">Secilmedi</option>
+                    {BROADCAST_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="panel-label">Kanal</label>
+                  <input className="panel-input" value={editBroadcastChannel} onChange={(e) => setEditBroadcastChannel(e.target.value)} placeholder="TRT1, ATV..." />
+                </div>
+              </div>
+              <div>
+                <label className="panel-label">Kanal Logo URL</label>
+                <input className="panel-input" value={editChannelLogoUrl} onChange={(e) => setEditChannelLogoUrl(e.target.value)} placeholder="https://..." />
+              </div>
+              <div>
+                <label className="panel-label">Poster URL</label>
+                <input className="panel-input" value={editPosterUrl} onChange={(e) => setEditPosterUrl(e.target.value)} placeholder="https://..." />
+              </div>
+              <div>
+                <label className="panel-label">Backdrop URL</label>
+                <input className="panel-input" value={editBackdropUrl} onChange={(e) => setEditBackdropUrl(e.target.value)} placeholder="https://..." />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="panel-label">Cikis Yili</label>
+                  <input type="number" className="panel-input" value={editReleaseYear} onChange={(e) => setEditReleaseYear(e.target.value)} placeholder="2024" />
+                </div>
+                <div>
+                  <label className="panel-label">Puan</label>
+                  <input type="number" step="0.1" min="0" max="10" className="panel-input" value={editRating} onChange={(e) => setEditRating(e.target.value)} placeholder="7.5" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" className="secondary-button" onClick={() => setEditSeries(null)}>
+                  <X size={16} /> Iptal
+                </button>
+                <button type="submit" className="primary-button" disabled={updateSeriesMutation.isPending}>
+                  <Check size={16} /> {updateSeriesMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

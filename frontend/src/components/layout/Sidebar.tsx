@@ -120,10 +120,6 @@ export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: S
           <div className="mb-6 rounded-3xl border border-white/10 bg-white/10 p-4">
             <div className="text-xs uppercase tracking-[0.22em] text-white/55">Deployment</div>
             <div className="mt-2 text-sm font-medium text-white">Main server aktif gorunumu</div>
-            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-300">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-              62.210.92.252 senkronize
-            </div>
           </div>
         )}
 

@@ -1,8 +1,12 @@
+import os
+import shutil
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
+
+from app.core.config import settings
 
 from app.modules.content.models import (
     Bouquet,
@@ -600,9 +604,32 @@ def update_series(db: Session, series_id: int, payload: SeriesContentUpdate) -> 
 
 
 def delete_series(db: Session, series_id: int) -> None:
-    item = db.query(SeriesContent).filter(SeriesContent.id == series_id).first()
+    item = (
+        db.query(SeriesContent)
+        .options(joinedload(SeriesContent.seasons).joinedload(SeriesSeason.episodes))
+        .filter(SeriesContent.id == series_id)
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi bulunamadi")
+
+    # Delete individual episode files
+    for season in item.seasons:
+        for ep in season.episodes:
+            if ep.file_path and os.path.exists(ep.file_path):
+                try:
+                    os.remove(ep.file_path)
+                except OSError:
+                    pass
+
+    # Delete the series folder (series_{id})
+    series_dir = settings.movies_uploads_path / f"series_{series_id}"
+    if series_dir.exists():
+        try:
+            shutil.rmtree(series_dir)
+        except OSError:
+            pass
+
     db.delete(item)
     db.commit()
 
@@ -627,9 +654,23 @@ def create_season(db: Session, series_id: int, payload: SeasonCreate) -> dict[st
 
 
 def delete_season(db: Session, series_id: int, season_id: int) -> None:
-    season = db.query(SeriesSeason).filter(SeriesSeason.id == season_id, SeriesSeason.series_id == series_id).first()
+    season = (
+        db.query(SeriesSeason)
+        .options(joinedload(SeriesSeason.episodes))
+        .filter(SeriesSeason.id == season_id, SeriesSeason.series_id == series_id)
+        .first()
+    )
     if season is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sezon bulunamadi")
+
+    # Delete episode files for this season
+    for ep in season.episodes:
+        if ep.file_path and os.path.exists(ep.file_path):
+            try:
+                os.remove(ep.file_path)
+            except OSError:
+                pass
+
     db.delete(season)
     db.commit()
 
@@ -667,6 +708,14 @@ def delete_episode(db: Session, episode_id: int) -> None:
     ep = db.query(SeriesEpisode).filter(SeriesEpisode.id == episode_id).first()
     if ep is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bolum bulunamadi")
+
+    # Delete physical file if exists
+    if ep.file_path and os.path.exists(ep.file_path):
+        try:
+            os.remove(ep.file_path)
+        except OSError:
+            pass
+
     db.delete(ep)
     db.commit()
 
