@@ -501,6 +501,7 @@ def _build_download_command(item: DownloadQueue, max_download_speed_mbps: float)
         "--remote-components", "ejs:github",
         "--merge-output-format",
         "mp4",
+        "--ppa", "Merger+ffmpeg_o:-movflags +faststart",
         "-o",
         str(output_template),
     ]
@@ -510,13 +511,13 @@ def _build_download_command(item: DownloadQueue, max_download_speed_mbps: float)
 
     if item.source_type == DownloadSourceType.youtube:
         if item.resolution == "2160":
-            command.extend(["-f", "bestvideo[height<=2160]+bestaudio/bestvideo[height<=2160]*+bestaudio/best[height<=2160]/best"])
+            command.extend(["-f", "bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160][vcodec^=avc1]+bestaudio/bestvideo[height<=2160]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]/best"])
         elif item.resolution == "1080":
-            command.extend(["-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=1080]*+bestaudio/best[height<=1080]/best"])
+            command.extend(["-f", "bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080][vcodec^=avc1]+bestaudio/bestvideo[height<=1080]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"])
         elif item.resolution == "720":
-            command.extend(["-f", "bestvideo[height<=720]+bestaudio/bestvideo[height<=720]*+bestaudio/best[height<=720]/best"])
+            command.extend(["-f", "bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][vcodec^=avc1]+bestaudio/bestvideo[height<=720]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best"])
         else:
-            command.extend(["-f", "bestvideo+bestaudio/bestvideo*+bestaudio/best"])
+            command.extend(["-f", "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best"])
         cookies_path = settings.youtube_cookies_path
         if cookies_path.exists() and cookies_path.stat().st_size > 0:
             command.extend(["--cookies", str(cookies_path)])
@@ -594,6 +595,21 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
     output_file = candidates[0] if candidates else None
     if output_file is None:
         raise RuntimeError("Indirilen dosya bulunamadi")
+
+    # MP4 dosyalara faststart uygula (moov atom'u basa tası - IPTV uyumluluğu)
+    if output_file.suffix.lower() == ".mp4":
+        tmp_file = output_file.with_suffix(".faststart.mp4")
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(output_file), "-c", "copy", "-movflags", "+faststart", str(tmp_file)],
+                capture_output=True,
+                timeout=300,
+            )
+            if result.returncode == 0 and tmp_file.exists():
+                tmp_file.replace(output_file)
+        except Exception:
+            if tmp_file.exists():
+                tmp_file.unlink()
 
     item.file_path = str(output_file)
     item.file_size_bytes = output_file.stat().st_size

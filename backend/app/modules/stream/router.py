@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -132,21 +133,84 @@ def get_m3u_plus(
 
             if item_type == "tv":
                 stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
             elif item_type == "movie":
                 stream_url = f"{base}/movie/{username}/{password}/{item.item_id}.mp4"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
             elif item_type == "series":
-                stream_url = f"{base}/series/{username}/{password}/{item.item_id}.mp4"
+                # Emit one entry per episode that has a file or source URL
+                series_obj = db.query(SeriesContent).filter(SeriesContent.id == item.item_id).first()
+                if series_obj:
+                    seasons = (
+                        db.query(SeriesSeason)
+                        .filter(SeriesSeason.series_id == series_obj.id)
+                        .order_by(SeriesSeason.season_number.asc())
+                        .all()
+                    )
+                    emitted = False
+                    for season in seasons:
+                        episodes = (
+                            db.query(SeriesEpisode)
+                            .filter(
+                                SeriesEpisode.season_id == season.id,
+                                or_(
+                                    SeriesEpisode.source_url.isnot(None),
+                                    SeriesEpisode.file_path.isnot(None),
+                                ),
+                            )
+                            .order_by(SeriesEpisode.episode_number.asc())
+                            .all()
+                        )
+                        for ep in episodes:
+                            # Skip episodes with empty-string file_path and no source_url
+                            has_file = ep.file_path and ep.file_path.strip() != ""
+                            has_url = ep.source_url and ep.source_url.strip() != ""
+                            if not has_file and not has_url:
+                                continue
+                            sn = season.season_number or 0
+                            en = ep.episode_number or 0
+                            ep_label = f"{title} S{sn:02d}E{en:02d}"
+                            ep_extinf = (
+                                f'#EXTINF:-1 tvg-id="{ep.id}" tvg-name="{ep_label}" '
+                                f'tvg-logo="{logo}" group-title="{bouquet.name}",{ep_label}'
+                            )
+                            lines.append(ep_extinf)
+                            lines.append(f"{base}/series/{username}/{password}/{ep.id}.mp4")
+                            emitted = True
+                    if not emitted:
+                        # Fallback: single series-level URL if no episodes found
+                        extinf = (
+                            f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                            f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                        )
+                        lines.append(extinf)
+                        lines.append(f"{base}/series/{username}/{password}/{item.item_id}.mp4")
             elif item_type == "vod_channel":
                 stream_url = f"{base}/live/{username}/{password}/{item.item_id}"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
             else:
                 stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
-
-            extinf = (
-                f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
-                f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
-            )
-            lines.append(extinf)
-            lines.append(stream_url)
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
 
     # TV Channels (from tv_channel_bouquets)
     from app.modules.tv.models import TvChannel, TvChannelBouquet
@@ -270,30 +334,60 @@ def serve_movie(username: str, password: str, item_id: int, request: Request, db
 @router.get("/series/{username}/{password}/{item_id}.mp4", tags=["stream"])
 def serve_series(username: str, password: str, item_id: int, request: Request, db: Session = Depends(get_db)):
     user = _auth_iptv_user(db, username, password)
+
+    # --- Fix 1a: Check if item_id is a SeriesEpisode.id (per-episode URL) ---
+    episode = db.query(SeriesEpisode).filter(SeriesEpisode.id == item_id).first()
+    if episode is not None:
+        # Resolve parent series to check access
+        season = db.query(SeriesSeason).filter(SeriesSeason.id == episode.season_id).first()
+        series_id = season.series_id if season else None
+        if series_id is None or not _check_item_access(db, user, "series", series_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Erisim yok")
+        series = db.query(SeriesContent).filter(SeriesContent.id == series_id).first()
+        series_name = getattr(series, "title", None) if series else None
+        _do_checks_and_record(db, user, request, item_id, "series", series_name)
+        has_file = episode.file_path and episode.file_path.strip() != "" and os.path.isfile(episode.file_path)
+        if has_file:
+            return FileResponse(episode.file_path, media_type="video/mp4")
+        if episode.source_url and episode.source_url.strip() != "":
+            return RedirectResponse(url=episode.source_url, status_code=302)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode dosyasi bulunamadi")
+
+    # --- Fix 1b: Fallback — item_id is a SeriesContent.id, find first available episode ---
     if not _check_item_access(db, user, "series", item_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Erisim yok")
     series = db.query(SeriesContent).filter(SeriesContent.id == item_id).first()
     if series is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi bulunamadi")
     _do_checks_and_record(db, user, request, item_id, "series", getattr(series, "title", None))
-    first_season = (
+
+    # Find first season/episode that actually has a file or source URL
+    seasons = (
         db.query(SeriesSeason)
         .filter(SeriesSeason.series_id == item_id)
         .order_by(SeriesSeason.season_number.asc())
-        .first()
+        .all()
     )
-    if first_season:
-        first_ep = (
+    for season in seasons:
+        episodes = (
             db.query(SeriesEpisode)
-            .filter(SeriesEpisode.season_id == first_season.id)
+            .filter(
+                SeriesEpisode.season_id == season.id,
+                or_(
+                    SeriesEpisode.source_url.isnot(None),
+                    SeriesEpisode.file_path.isnot(None),
+                ),
+            )
             .order_by(SeriesEpisode.episode_number.asc())
-            .first()
+            .all()
         )
-        if first_ep:
-            if first_ep.file_path and os.path.isfile(first_ep.file_path):
-                return FileResponse(first_ep.file_path, media_type="video/mp4")
-            if first_ep.source_url:
-                return RedirectResponse(url=first_ep.source_url, status_code=302)
+        for ep in episodes:
+            has_file = ep.file_path and ep.file_path.strip() != "" and os.path.isfile(ep.file_path)
+            if has_file:
+                return FileResponse(ep.file_path, media_type="video/mp4")
+            if ep.source_url and ep.source_url.strip() != "":
+                return RedirectResponse(url=ep.source_url, status_code=302)
+
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi dosyasi bulunamadi")
 
 

@@ -131,7 +131,11 @@ def dashboard(
 ):
     from app.modules.users.models import User, ActivityLog
     from app.modules.servers.models import Server
-    from app.modules.content.models import MovieCategory, SeriesCategory, TvCategory, RadioCategory
+    from app.modules.content.models import (
+        MovieCategory, SeriesCategory, TvCategory, RadioCategory,
+        Bouquet, SeriesContent, MovieContent, TvContent, RadioContent,
+    )
+    from app.modules.tv.models import TvChannel
     import os
 
     total_users = db.query(User).count()
@@ -142,6 +146,11 @@ def dashboard(
         + db.query(TvCategory).count()
         + db.query(RadioCategory).count()
     )
+    total_bouquets = db.query(Bouquet).count()
+    total_series = db.query(SeriesContent).count()
+    total_movies = db.query(MovieContent).count()
+    total_tv_channels = db.query(TvChannel).count()
+    total_radio = db.query(RadioContent).count()
 
     uptime_seconds = 0
     try:
@@ -160,6 +169,11 @@ def dashboard(
         "total_users": total_users,
         "total_servers": total_servers,
         "total_categories": total_categories,
+        "total_bouquets": total_bouquets,
+        "total_series": total_series,
+        "total_movies": total_movies,
+        "total_tv_channels": total_tv_channels,
+        "total_radio": total_radio,
         "uptime_seconds": uptime_seconds,
         "recent_activity": [
             {

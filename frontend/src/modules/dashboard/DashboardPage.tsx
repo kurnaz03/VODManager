@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
+  Clapperboard,
   Cpu,
   Crown,
   Film,
+  Grid3X3,
   HardDrive,
   Layers3,
   MemoryStick,
+  Monitor,
+  Radio,
   ServerCog,
   Users,
   Wifi,
@@ -165,6 +169,11 @@ export default function DashboardPage() {
         total_users: number
         total_servers: number
         total_categories: number
+        total_bouquets: number
+        total_series: number
+        total_movies: number
+        total_tv_channels: number
+        total_radio: number
         uptime_seconds: number
         recent_activity: { action: string; ip_address: string | null; created_at: string | null }[]
       }>('/admin/dashboard')
@@ -216,6 +225,11 @@ export default function DashboardPage() {
   const totalServers = dashboardQuery.data?.total_servers ?? servers.length
   const totalUsers = dashboardQuery.data?.total_users ?? 0
   const totalCategories = dashboardQuery.data?.total_categories ?? 0
+  const totalBouquets = dashboardQuery.data?.total_bouquets ?? 0
+  const totalSeries = dashboardQuery.data?.total_series ?? 0
+  const totalMovies = dashboardQuery.data?.total_movies ?? 0
+  const totalTvChannels = dashboardQuery.data?.total_tv_channels ?? 0
+  const totalRadio = dashboardQuery.data?.total_radio ?? 0
 
   return (
     <div className="space-y-6">
@@ -227,37 +241,6 @@ export default function DashboardPage() {
             Uptime: <span className="font-medium text-slate-700">{uptimeDisplay}</span>
           </span>
         )}
-      </div>
-
-      {/* ── Summary boxes ── */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="glass-panel flex items-center gap-4 p-5">
-          <div className="icon-chip">
-            <ServerCog size={18} />
-          </div>
-          <div>
-            <div className="text-2xl font-semibold text-slate-900">{totalServers}</div>
-            <div className="text-sm text-slate-500">Toplam Sunucu</div>
-          </div>
-        </div>
-        <div className="glass-panel flex items-center gap-4 p-5">
-          <div className="icon-chip icon-chip-amber">
-            <Users size={18} />
-          </div>
-          <div>
-            <div className="text-2xl font-semibold text-slate-900">{totalUsers}</div>
-            <div className="text-sm text-slate-500">Toplam Kullanici</div>
-          </div>
-        </div>
-        <div className="glass-panel flex items-center gap-4 p-5">
-          <div className="icon-chip icon-chip-green">
-            <Layers3 size={18} />
-          </div>
-          <div>
-            <div className="text-2xl font-semibold text-slate-900">{totalCategories}</div>
-            <div className="text-sm text-slate-500">Toplam Kategori</div>
-          </div>
-        </div>
       </div>
 
       {/* ── 4 Gradient Metric Cards ── */}
@@ -446,6 +429,93 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Statistics ── */}
+      <div className="glass-panel p-6">
+        <h3 className="mb-4 text-xl font-semibold text-slate-900">Statistics</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {/* Toplam Sunucu */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-pink-500">
+              <ServerCog size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Sunucu</span>
+            <span className="rounded-md bg-pink-100 px-3 py-1 text-sm font-semibold text-pink-600">
+              {totalServers}
+            </span>
+          </div>
+          {/* Toplam Kullanici */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-pink-500">
+              <Users size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Kullanici</span>
+            <span className="rounded-md bg-pink-100 px-3 py-1 text-sm font-semibold text-pink-600">
+              {totalUsers}
+            </span>
+          </div>
+          {/* Toplam Bouquets */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-green-500">
+              <Layers3 size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Bouquets</span>
+            <span className="rounded-md bg-green-100 px-3 py-1 text-sm font-semibold text-green-600">
+              {totalBouquets}
+            </span>
+          </div>
+          {/* Toplam Kategori */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-orange-500">
+              <Grid3X3 size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Kategori</span>
+            <span className="rounded-md bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-600">
+              {totalCategories}
+            </span>
+          </div>
+          {/* Toplam Series */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-500">
+              <Film size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Series</span>
+            <span className="rounded-md bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              {totalSeries}
+            </span>
+          </div>
+          {/* Toplam Radyo */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-500">
+              <Radio size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Radyo</span>
+            <span className="rounded-md bg-red-100 px-3 py-1 text-sm font-semibold text-red-600">
+              {totalRadio}
+            </span>
+          </div>
+          {/* Toplam Movies */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-500">
+              <Clapperboard size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam Movies</span>
+            <span className="rounded-md bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-600">
+              {totalMovies}
+            </span>
+          </div>
+          {/* Toplam TV Kanallari */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500">
+              <Monitor size={18} className="text-white" />
+            </div>
+            <span className="flex-1 text-sm font-medium text-slate-700">Toplam TV Kanallari</span>
+            <span className="rounded-md bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-600">
+              {totalTvChannels}
+            </span>
+          </div>
         </div>
       </div>
     </div>
