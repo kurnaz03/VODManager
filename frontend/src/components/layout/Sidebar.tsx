@@ -116,13 +116,6 @@ export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: S
           </button>
         </div>
 
-        {!showCollapsed && (
-          <div className="mb-6 rounded-3xl border border-white/10 bg-white/10 p-4">
-            <div className="text-xs uppercase tracking-[0.22em] text-white/55">Deployment</div>
-            <div className="mt-2 text-sm font-medium text-white">Main server aktif gorunumu</div>
-          </div>
-        )}
-
         <nav className={`flex-1 space-y-6 overflow-y-auto ${showCollapsed ? '' : 'pr-1'}`}>
           {groups.map((group) => (
             <div key={group.label}>
