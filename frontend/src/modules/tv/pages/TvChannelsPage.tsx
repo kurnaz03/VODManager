@@ -20,13 +20,13 @@ import { serversApi, Server as ServerType } from '../../servers/services/servers
 
 function statusBadge(active: boolean) {
   return active ? (
-    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
       Aktif
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-slate-500/20 text-slate-400 border border-slate-500/30">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
+      <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
       Pasif
     </span>
   )
@@ -89,18 +89,18 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
   }
 
   const inputCls =
-    'w-full rounded bg-[#1a1e2e] border border-[#2e3553] px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition'
-  const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1'
+    'w-full rounded bg-white border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition'
+  const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-gray-600 mb-1'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#2e3553] bg-[#12162a] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#2e3553] px-6 py-4">
-          <div className="flex items-center gap-2 text-slate-100 font-semibold text-base">
-            <MonitorPlay size={18} className="text-blue-400" />
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center gap-2 text-gray-800 font-semibold text-base">
+            <MonitorPlay size={18} className="text-blue-500" />
             {isEdit ? 'Kanal Duzenle' : 'Yeni Kanal Ekle'}
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white transition">
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 transition">
             <X size={18} />
           </button>
         </div>
@@ -166,7 +166,7 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
               </select>
             </div>
             <div>
-              <label className={labelCls}>Sıralama</label>
+              <label className={labelCls}>Siralama</label>
               <input
                 type="number"
                 className={inputCls}
@@ -182,8 +182,8 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
                 onClick={() => setIsActive((v) => !v)}
                 className={`flex items-center gap-2 rounded px-3 py-2 text-sm font-medium border transition ${
                   isActive
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                    : 'bg-slate-700/40 border-slate-600/40 text-slate-400'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-gray-100 border-gray-300 text-gray-500'
                 }`}
               >
                 {isActive ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
@@ -198,9 +198,9 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
               <Server size={12} className="inline mr-1" />
               Sunucu Atamasi (coklu secim)
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto rounded border border-[#2e3553] bg-[#1a1e2e] p-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto rounded border border-gray-300 bg-gray-50 p-2">
               {servers.length === 0 && (
-                <span className="text-xs text-slate-500 col-span-3">Sunucu bulunamadi</span>
+                <span className="text-xs text-gray-400 col-span-3">Sunucu bulunamadi</span>
               )}
               {servers.map((srv) => {
                 const sel = selectedServers.includes(srv.id)
@@ -211,8 +211,8 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
                     onClick={() => toggleServer(srv.id)}
                     className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-left transition border ${
                       sel
-                        ? 'bg-blue-600/30 border-blue-500/50 text-blue-300'
-                        : 'bg-[#242840] border-[#2e3553] text-slate-400 hover:border-blue-500/30'
+                        ? 'bg-blue-100 border-blue-400 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-blue-400'
                     }`}
                   >
                     <Server size={11} />
@@ -229,9 +229,9 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
               <Zap size={12} className="inline mr-1" />
               Bouquet Atamasi (coklu secim)
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto rounded border border-[#2e3553] bg-[#1a1e2e] p-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto rounded border border-gray-300 bg-gray-50 p-2">
               {bouquets.length === 0 && (
-                <span className="text-xs text-slate-500 col-span-3">Bouquet bulunamadi</span>
+                <span className="text-xs text-gray-400 col-span-3">Bouquet bulunamadi</span>
               )}
               {bouquets.map((bq) => {
                 const sel = selectedBouquets.includes(bq.id)
@@ -242,8 +242,8 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
                     onClick={() => toggleBouquet(bq.id)}
                     className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-left transition border ${
                       sel
-                        ? 'bg-purple-600/30 border-purple-500/50 text-purple-300'
-                        : 'bg-[#242840] border-[#2e3553] text-slate-400 hover:border-purple-500/30'
+                        ? 'bg-purple-100 border-purple-400 text-purple-700'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-purple-400'
                     }`}
                   >
                     <Zap size={11} />
@@ -255,7 +255,7 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded text-sm text-gray-500 hover:text-gray-800 transition">
               Iptal
             </button>
             <button
@@ -348,24 +348,24 @@ export default function TvChannelsPage() {
   const bouquets = bouquetsQuery.data ?? []
 
   return (
-    <div className="min-h-screen bg-[#0e1120] text-slate-200">
+    <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
-      <div className="border-b border-[#1e2440] bg-[#12162a] px-6 py-5">
+      <div className="border-b border-gray-200 bg-white px-6 py-5 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
               <MonitorPlay size={20} />
             </div>
             <div>
-              <div className="text-xs uppercase tracking-widest text-slate-500">Xtream Codes</div>
-              <h1 className="text-xl font-bold text-slate-100">TV Kanallari</h1>
+              <div className="text-xs uppercase tracking-widest text-gray-400">Xtream Codes</div>
+              <h1 className="text-xl font-bold text-gray-800">TV Kanallari</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] })}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2e3553] bg-[#1a1e2e] px-3 py-2 text-xs text-slate-400 hover:text-white transition"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-600 hover:text-gray-900 hover:border-gray-400 transition shadow-sm"
             >
               <RefreshCw size={13} />
               Yenile
@@ -373,7 +373,7 @@ export default function TvChannelsPage() {
             <button
               type="button"
               onClick={() => { setEditChannel(null); setModalOpen(true) }}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition"
+              className="flex items-center gap-2 rounded-lg bg-green-500 hover:bg-green-600 px-4 py-2 text-sm font-semibold text-white transition shadow-sm"
             >
               <Plus size={15} />
               Yeni Kanal
@@ -385,13 +385,13 @@ export default function TvChannelsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 pt-5">
         {[
-          { label: 'Toplam Kanal', value: channels.length, color: 'text-blue-400' },
-          { label: 'Aktif', value: channels.filter((c) => c.is_active).length, color: 'text-emerald-400' },
-          { label: 'Pasif', value: channels.filter((c) => !c.is_active).length, color: 'text-slate-500' },
-          { label: 'Kategori', value: categories.length, color: 'text-purple-400' },
+          { label: 'Toplam Kanal', value: channels.length, color: 'text-blue-600' },
+          { label: 'Aktif', value: channels.filter((c) => c.is_active).length, color: 'text-emerald-600' },
+          { label: 'Pasif', value: channels.filter((c) => !c.is_active).length, color: 'text-gray-400' },
+          { label: 'Kategori', value: categories.length, color: 'text-purple-600' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-[#2e3553] bg-[#12162a] px-4 py-3">
-            <div className="text-xs text-slate-500 uppercase tracking-wide">{s.label}</div>
+          <div key={s.label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</div>
             <div className={`mt-1 text-2xl font-bold ${s.color}`}>{s.value}</div>
           </div>
         ))}
@@ -404,8 +404,8 @@ export default function TvChannelsPage() {
           onClick={() => setFilterCat(null)}
           className={`rounded px-3 py-1.5 text-xs font-medium transition border ${
             filterCat === null
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'border-[#2e3553] bg-[#1a1e2e] text-slate-400 hover:text-white'
+              ? 'bg-blue-500 border-blue-500 text-white'
+              : 'border-gray-300 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-400'
           }`}
         >
           Tumu
@@ -417,8 +417,8 @@ export default function TvChannelsPage() {
             onClick={() => setFilterCat(cat.id)}
             className={`rounded px-3 py-1.5 text-xs font-medium transition border ${
               filterCat === cat.id
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'border-[#2e3553] bg-[#1a1e2e] text-slate-400 hover:text-white'
+                ? 'bg-blue-500 border-blue-500 text-white'
+                : 'border-gray-300 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-400'
             }`}
           >
             {cat.name}
@@ -431,27 +431,27 @@ export default function TvChannelsPage() {
         <div
           className={`mx-6 mt-4 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${
             testResult.ok
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-              : 'border-red-500/30 bg-red-500/10 text-red-300'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-red-200 bg-red-50 text-red-700'
           }`}
         >
           {testResult.ok ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
           <span>Kanal #{testResult.id}: {testResult.msg}</span>
-          <button type="button" onClick={() => setTestResult(null)} className="ml-auto">
+          <button type="button" onClick={() => setTestResult(null)} className="ml-auto text-current opacity-60 hover:opacity-100">
             <X size={14} />
           </button>
         </div>
       )}
 
       {/* Table */}
-      <div className="px-6 pb-10 pt-4">
-        <div className="rounded-xl border border-[#2e3553] bg-[#12162a] overflow-hidden">
+      <div className="px-6 pb-4 pt-4">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2e3553] bg-[#0e1120]">
+                <tr className="border-b border-gray-200 bg-gray-50">
                   {['#', 'Logo', 'Ad', 'Kategori', 'Stream URL', 'Sunucular', 'Bouquets', 'Durum', 'Aksiyonlar'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                       {h}
                     </th>
                   ))}
@@ -460,7 +460,7 @@ export default function TvChannelsPage() {
               <tbody>
                 {channelsQuery.isLoading && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-16 text-center text-slate-500">
+                    <td colSpan={9} className="px-6 py-16 text-center text-gray-400">
                       <RefreshCw size={18} className="animate-spin inline mr-2" />
                       Yukleniyor...
                     </td>
@@ -468,42 +468,40 @@ export default function TvChannelsPage() {
                 )}
                 {!channelsQuery.isLoading && channels.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-16 text-center text-slate-600">
+                    <td colSpan={9} className="px-6 py-16 text-center text-gray-400">
                       Hic kanal eklenmemis. "Yeni Kanal" ile baslayabilirsiniz.
                     </td>
                   </tr>
                 )}
-                {channels.map((ch, idx) => (
+                {channels.map((ch) => (
                   <tr
                     key={ch.id}
-                    className={`border-b border-[#1e2440] transition hover:bg-[#1a1e2e] ${
-                      idx % 2 === 0 ? '' : 'bg-[#11152300]'
-                    }`}
+                    className="border-b border-gray-100 transition hover:bg-gray-50"
                   >
-                    <td className="px-4 py-3 text-slate-500 font-mono text-xs">#{ch.id}</td>
+                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">#{ch.id}</td>
                     <td className="px-4 py-3">
                       {ch.logo_url ? (
-                        <img src={ch.logo_url} alt={ch.name} className="h-8 w-12 object-contain rounded bg-[#1e2440]" />
+                        <img src={ch.logo_url} alt={ch.name} className="h-8 w-12 object-contain rounded bg-gray-100" />
                       ) : (
-                        <div className="flex h-8 w-12 items-center justify-center rounded bg-[#1e2440] text-slate-600">
+                        <div className="flex h-8 w-12 items-center justify-center rounded bg-gray-100 text-gray-400">
                           <MonitorPlay size={14} />
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-100">{ch.name}</td>
-                    <td className="px-4 py-3 text-slate-400 text-xs">{ch.category_name ?? <span className="text-slate-600">-</span>}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{ch.name}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{ch.category_name ?? <span className="text-gray-300">-</span>}</td>
                     <td className="px-4 py-3 max-w-[180px]">
-                      <span className="block truncate text-xs text-slate-500 font-mono" title={ch.stream_url}>
+                      <span className="block truncate text-xs text-gray-500 font-mono" title={ch.stream_url}>
                         {ch.stream_url}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       {ch.servers.length === 0 ? (
-                        <span className="text-xs text-slate-600">-</span>
+                        <span className="text-xs text-gray-300">-</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {ch.servers.map((s) => (
-                            <span key={s.id} className="rounded bg-blue-600/20 border border-blue-500/20 px-1.5 py-0.5 text-xs text-blue-300">
+                            <span key={s.id} className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-xs text-blue-700">
                               {s.server_name ?? `#${s.server_id}`}
                             </span>
                           ))}
@@ -512,11 +510,11 @@ export default function TvChannelsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {ch.bouquet_assignments.length === 0 ? (
-                        <span className="text-xs text-slate-600">-</span>
+                        <span className="text-xs text-gray-300">-</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {ch.bouquet_assignments.map((b) => (
-                            <span key={b.id} className="rounded bg-purple-600/20 border border-purple-500/20 px-1.5 py-0.5 text-xs text-purple-300">
+                            <span key={b.id} className="rounded bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700">
                               {b.bouquet_name ?? `#${b.bouquet_id}`}
                             </span>
                           ))}
@@ -531,7 +529,7 @@ export default function TvChannelsPage() {
                           onClick={() => handleTest(ch.id)}
                           disabled={testingId === ch.id}
                           title="Stream Test"
-                          className="flex items-center gap-1 rounded border border-[#2e3553] bg-[#1a1e2e] px-2 py-1.5 text-xs text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 transition disabled:opacity-50"
+                          className="flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition disabled:opacity-50 shadow-sm"
                         >
                           {testingId === ch.id ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
                           Test
@@ -540,7 +538,7 @@ export default function TvChannelsPage() {
                           type="button"
                           onClick={() => { setEditChannel(ch); setModalOpen(true) }}
                           title="Duzenle"
-                          className="flex items-center gap-1 rounded border border-[#2e3553] bg-[#1a1e2e] px-2 py-1.5 text-xs text-blue-400 hover:border-blue-500/40 hover:bg-blue-500/10 transition"
+                          className="flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition shadow-sm"
                         >
                           <Edit2 size={12} />
                           Duzenle
@@ -549,7 +547,7 @@ export default function TvChannelsPage() {
                           type="button"
                           onClick={() => setDeleteId(ch.id)}
                           title="Sil"
-                          className="flex items-center gap-1 rounded border border-[#2e3553] bg-[#1a1e2e] px-2 py-1.5 text-xs text-red-400 hover:border-red-500/40 hover:bg-red-500/10 transition"
+                          className="flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-red-500 hover:border-red-400 hover:bg-red-50 transition shadow-sm"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -585,14 +583,14 @@ export default function TvChannelsPage() {
       {/* Delete Confirm */}
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[#2e3553] bg-[#12162a] p-6 shadow-2xl">
-            <div className="flex items-center gap-2 text-red-400 font-semibold mb-2">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-red-500 font-semibold mb-2">
               <Trash2 size={18} />
               Kanali Sil
             </div>
-            <p className="text-sm text-slate-400">Bu kanal kalici olarak silinecek. Emin misiniz?</p>
+            <p className="text-sm text-gray-600">Bu kanal kalici olarak silinecek. Emin misiniz?</p>
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => setDeleteId(null)} className="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition">
+              <button type="button" onClick={() => setDeleteId(null)} className="px-4 py-2 rounded text-sm text-gray-500 hover:text-gray-800 transition">
                 Iptal
               </button>
               <button
