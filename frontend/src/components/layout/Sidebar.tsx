@@ -221,7 +221,7 @@ export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: S
         {!showCollapsed && (
           <div className="mt-6 rounded-3xl border border-white/10 bg-white/10 p-4">
             <div className="text-xs uppercase tracking-[0.2em] text-white/45">Version</div>
-            <div className="mt-2 text-sm text-white/80">v1.0.0</div>
+            <div className="mt-2 text-sm text-white/80">v1.0.0-{__GIT_HASH__}</div>
           </div>
         )}
       </aside>
