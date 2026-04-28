@@ -14,11 +14,14 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.security import decrypt_secret
 from app.modules.playlist.models import Playlist, PlaylistItem
 from app.modules.servers.models import Server
+from app.core.config import settings
 
 HLS_ROOT = Path("/var/www/vod-manager/shared/hls")
-MAIN_SERVER_IP = "62.210.92.252"
-TRANSCODE_BASE_URL = f"http://{MAIN_SERVER_IP}/transcode"
 TRANSCODE_LOCAL_PATH = "/var/www/vod-manager/shared/transcode"
+
+
+def _transcode_base_url() -> str:
+    return f"http://{settings.MAIN_SERVER_IP}/transcode"
 
 
 def _get_stream_dir(playlist_id: int) -> Path:
@@ -47,7 +50,7 @@ def _build_concat_content_http(items: list[PlaylistItem]) -> str:
         if file_path.startswith(TRANSCODE_LOCAL_PATH):
             relative = file_path[len(TRANSCODE_LOCAL_PATH):]
             relative = relative.lstrip("/")
-            url = f"{TRANSCODE_BASE_URL}/{relative}"
+            url = f"{_transcode_base_url()}/{relative}"
         else:
             # Fallback: use as-is (may fail on remote, but better than nothing)
             url = file_path

@@ -1,9 +1,20 @@
+import socket
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _detect_server_ip() -> str:
+    """Detect local server IP via socket; fallback to 127.0.0.1."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
 
 
 class Settings(BaseSettings):
@@ -38,11 +49,19 @@ class Settings(BaseSettings):
     # Server management
     FERNET_KEY: str | None = None
     MAIN_SERVER_NAME: str = "Main Server"
-    MAIN_SERVER_IP: str = "62.210.92.252"
+    SERVER_HOST: str = ""  # Set in backend.env; auto-detected if empty
+    SERVER_PORT: int = 8080
     MAIN_SERVER_SSH_PORT: int = 22
     MAIN_SERVER_SSH_USERNAME: str = "root"
     MAIN_SERVER_SSH_PASSWORD: str = ""
     SHARED_STORAGE_ROOT: str = str(PROJECT_ROOT / "storage")
+
+    @property
+    def MAIN_SERVER_IP(self) -> str:
+        """Return SERVER_HOST from env if set, otherwise auto-detect."""
+        if self.SERVER_HOST:
+            return self.SERVER_HOST
+        return _detect_server_ip()
 
     @property
     def allowed_origins_list(self) -> List[str]:

@@ -11,12 +11,18 @@ import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.modules.tv.models import TvChannel, TvChannelServer
 
-SERVER_HOST = "62.210.92.252"
-SERVER_PORT = 8080
-
 _http_client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+
+
+def _server_host() -> str:
+    return settings.MAIN_SERVER_IP
+
+
+def _server_port() -> int:
+    return settings.SERVER_PORT
 
 
 def pick_server_for_channel(db: Session, channel_id: int):
@@ -48,7 +54,7 @@ async def get_tv_m3u8_proxied(db: Session, channel_id: int, username: str, passw
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Kaynak stream alinamadi: {e}")
 
-    proxy_base = f"http://{SERVER_HOST}:{SERVER_PORT}/hls-proxy/tv/{channel_id}/"
+    proxy_base = f"http://{_server_host()}:{_server_port()}/hls-proxy/tv/{channel_id}/"
     lines = []
     for line in resp.text.splitlines():
         stripped = line.strip()

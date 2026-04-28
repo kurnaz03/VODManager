@@ -145,6 +145,6 @@ export const iptvUsersApi = {
     return r.data
   },
   m3uUrl(user: IptvUser, fmt: 'm3u_plus' | 'm3u8' | 'enigma2_api' = 'm3u_plus'): string {
-    return `http://62.210.92.252:8080/get.php?username=${encodeURIComponent(user.username)}&password=${encodeURIComponent(user.password)}&type=${fmt}`
+    return `http://${window.location.hostname}:8080/get.php?username=${encodeURIComponent(user.username)}&password=${encodeURIComponent(user.password)}&type=${fmt}`
   },
 }

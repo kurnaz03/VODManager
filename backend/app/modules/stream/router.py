@@ -18,14 +18,22 @@ from app.modules.connections import service as conn_svc
 from app.modules.tv.models import TvChannel, TvChannelBouquet
 from app.modules.tv import stream_service as tv_stream
 
+from app.core.config import settings
+
 router = APIRouter()
 
 # Module-level async HTTP client for connection pooling
 _http_client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
 
-SERVER_HOST = "62.210.92.252"
-SERVER_PORT = 8080
 HLS_BASE_DIR = "/var/www/vod-manager/shared/hls"
+
+
+def _server_host() -> str:
+    return settings.MAIN_SERVER_IP
+
+
+def _server_port() -> int:
+    return settings.SERVER_PORT
 
 
 def _get_client_ip(request: Request) -> str:
@@ -123,8 +131,8 @@ def _build_user_info(user: IptvUser) -> dict:
 def _build_server_info() -> dict:
     now = datetime.now()
     return {
-        "url": SERVER_HOST,
-        "port": str(SERVER_PORT),
+        "url": _server_host(),
+        "port": str(_server_port()),
         "https_port": "443",
         "server_protocol": "http",
         "rtmp_port": "1935",
@@ -474,7 +482,7 @@ def get_m3u_plus(
     db: Session = Depends(get_db),
 ):
     user = _auth_iptv_user(db, username, password)
-    base = f"http://{SERVER_HOST}:{SERVER_PORT}"
+    base = f"http://{_server_host()}:{_server_port()}"
     lines = ["#EXTM3U"]
 
     for ub in (user.bouquets or []):
@@ -703,7 +711,7 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
                 raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LB stream alinamadi")
 
             # Relative segment path'lerini /hls-proxy/ uzerinden rewrite et
-            proxy_base = f"http://{SERVER_HOST}:{SERVER_PORT}/hls-proxy/{playlist.id}/"
+            proxy_base = f"http://{_server_host()}:{_server_port()}/hls-proxy/{playlist.id}/"
             lines = []
             for line in resp.text.splitlines():
                 stripped = line.strip()
@@ -732,7 +740,7 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
         if os.path.isfile(hls_path):
             with open(hls_path, "r") as f:
                 m3u8_content = f.read()
-            hls_base = f"http://{SERVER_HOST}:{SERVER_PORT}/hls/{playlist.id}/"
+            hls_base = f"http://{_server_host()}:{_server_port()}/hls/{playlist.id}/"
             rewritten_lines = []
             for line in m3u8_content.splitlines():
                 if line.strip() and not line.startswith("#"):
