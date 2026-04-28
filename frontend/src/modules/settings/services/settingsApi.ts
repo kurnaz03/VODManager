@@ -62,6 +62,20 @@ export interface DownloadSettingsPayload {
   max_download_speed_mbps: number
 }
 
+export interface UpdateCheckResult {
+  current_commit: string
+  remote_commit: string
+  update_available: boolean
+  remote_commit_message: string
+}
+
+export interface UpdateApplyResult {
+  success: boolean
+  old_commit: string
+  new_commit: string
+  message: string
+}
+
 export const settingsApi = {
   async getTheme() {
     const response = await api.get<ThemeSettings>('/settings/theme')
@@ -143,6 +157,16 @@ export const settingsApi = {
 
   async updateDownloadSettings(payload: DownloadSettingsPayload) {
     const response = await api.put<DownloadSettings>('/downloads/settings', payload)
+    return response.data
+  },
+
+  async checkUpdate() {
+    const response = await api.get<UpdateCheckResult>('/admin/update/check')
+    return response.data
+  },
+
+  async applyUpdate() {
+    const response = await api.post<UpdateApplyResult>('/admin/update/apply')
     return response.data
   },
 }

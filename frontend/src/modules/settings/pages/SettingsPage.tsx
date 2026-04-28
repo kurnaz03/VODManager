@@ -1,6 +1,6 @@
 import { ChangeEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, Eraser, ImagePlus, KeyRound, Plus, RefreshCcw, Server, Settings, Settings2, Shield, ShieldAlert, Trash2, UploadCloud, X, Youtube, XCircle, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, Download, Eraser, ImagePlus, KeyRound, Plus, RefreshCcw, Server, Settings, Settings2, Shield, ShieldAlert, Trash2, UploadCloud, X, Youtube, XCircle, AlertTriangle, RefreshCw, GitBranch, Loader2 } from 'lucide-react'
 import { useForm, UseFormRegisterReturn } from 'react-hook-form'
 import {
   DownloadSettingsPayload,
@@ -12,7 +12,7 @@ import {
 import { defaultBrandingTheme, useBrandingStore } from '../../../store/brandingStore'
 import { VpnClient, VpnClientCreate, VpnServerConfig, vpnApi } from '../../vpn/services/vpnApi'
 
-type SettingsTab = 'theme' | 'tmdb' | 'youtube' | 'downloads' | 'vpn'
+type SettingsTab = 'theme' | 'tmdb' | 'youtube' | 'downloads' | 'vpn' | 'update'
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'theme', label: 'Tema Ayarlari' },
@@ -20,6 +20,7 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'youtube', label: 'YouTube Cookies' },
   { id: 'downloads', label: 'Indirme Ayarlari' },
   { id: 'vpn', label: 'VPN Istemcileri' },
+  { id: 'update', label: 'Panel Guncelleme' },
 ]
 
 const tmdbLanguages = [
@@ -209,6 +210,8 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'vpn' && <VpnTab />}
+
+          {activeTab === 'update' && <UpdateTab />}
         </div>
       </section>
     </div>
@@ -1234,6 +1237,148 @@ function VpnServerConfigModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Update Tab
+// ---------------------------------------------------------------------------
+
+function UpdateTab() {
+  const [lastChecked, setLastChecked] = useState<string | null>(null)
+  const [applyResult, setApplyResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  const checkMutation = useMutation({
+    mutationFn: settingsApi.checkUpdate,
+    onSuccess: () => setLastChecked(new Date().toLocaleString('tr-TR')),
+  })
+
+  const applyMutation = useMutation({
+    mutationFn: settingsApi.applyUpdate,
+    onSuccess: (data) => {
+      setApplyResult({ success: data.success, message: data.message })
+      checkMutation.reset()
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      setApplyResult({
+        success: false,
+        message: err?.response?.data?.detail ?? 'Guncelleme sirasinda beklenmeyen bir hata olustu.',
+      })
+    },
+  })
+
+  const info = checkMutation.data
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1fr,0.9fr]">
+      {/* Sol: Kontrol ve eylem */}
+      <div className="space-y-4">
+        <div className="glass-panel p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <GitBranch size={18} className="vm-primary-text" />
+            <h3 className="text-lg font-semibold text-slate-900">Panel Guncelleme</h3>
+          </div>
+          <p className="mb-5 text-sm leading-6 text-slate-500">
+            GitHub'daki son surumu kontrol edin. Guncelleme mevcutsa <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">git pull</code> + frontend build + servis yeniden baslatma otomatik yapilir.
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => { setApplyResult(null); checkMutation.mutate() }}
+              disabled={checkMutation.isPending || applyMutation.isPending}
+            >
+              {checkMutation.isPending
+                ? <><Loader2 size={15} className="animate-spin" /> Kontrol ediliyor...</>
+                : <><RefreshCw size={15} /> Guncelleme Kontrol Et</>
+              }
+            </button>
+
+            {info?.update_available && !applyMutation.isSuccess && (
+              <button
+                type="button"
+                className="secondary-button border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                onClick={() => applyMutation.mutate()}
+                disabled={applyMutation.isPending}
+              >
+                {applyMutation.isPending
+                  ? <><Loader2 size={15} className="animate-spin" /> Guncelleniyor...</>
+                  : <><Download size={15} /> Simdi Guncelle</>
+                }
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Kontrol sonucu */}
+        {info && (
+          <div className={`glass-panel p-5 ${info.update_available ? 'border border-amber-200 bg-amber-50' : 'border border-emerald-200 bg-emerald-50'}`}>
+            <div className="flex items-center gap-2 font-semibold text-sm">
+              {info.update_available
+                ? <><AlertTriangle size={16} className="text-amber-600" /><span className="text-amber-800">Yeni guncelleme mevcut</span></>
+                : <><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-emerald-800">Panel guncel</span></>
+              }
+            </div>
+            <div className="mt-3 grid gap-2 text-xs text-slate-600">
+              <div className="flex justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <span className="text-slate-500">Mevcut commit</span>
+                <code className="font-mono font-semibold text-slate-800">{info.current_commit}</code>
+              </div>
+              <div className="flex justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <span className="text-slate-500">Remote commit</span>
+                <code className="font-mono font-semibold text-slate-800">{info.remote_commit}</code>
+              </div>
+              {info.remote_commit_message && (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                  <span className="text-slate-500">Son commit mesaji: </span>
+                  <span className="text-slate-800">{info.remote_commit_message}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Uygulama sonucu */}
+        {applyResult && (
+          <div className={`glass-panel p-5 ${applyResult.success ? 'border border-emerald-200 bg-emerald-50' : 'border border-rose-200 bg-rose-50'}`}>
+            <div className="flex items-center gap-2 font-semibold text-sm">
+              {applyResult.success
+                ? <><CheckCircle2 size={16} className="text-emerald-600" /><span className="text-emerald-800">Guncelleme basarili</span></>
+                : <><XCircle size={16} className="text-rose-600" /><span className="text-rose-800">Guncelleme basarisiz</span></>
+              }
+            </div>
+            <p className="mt-2 text-sm text-slate-700">{applyResult.message}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Sag: Bilgi */}
+      <div className="space-y-4">
+        <StatusCard
+          icon={<Server size={18} />}
+          tone="emerald"
+          title="Otomatik Guncelleme"
+          description="Her gun saat 04:00 UTC'de Celery Beat otomatik olarak guncelleme kontrolu yapar. Guncelleme varsa otomatik uygulanir."
+        />
+        <div className="glass-panel p-5 text-sm leading-6 text-slate-600">
+          <div className="mb-3 font-semibold text-slate-900">Guncelleme sureci:</div>
+          <ol className="ml-4 list-decimal space-y-1">
+            <li><code className="rounded bg-slate-100 px-1 font-mono text-xs">git pull origin main</code></li>
+            <li><code className="rounded bg-slate-100 px-1 font-mono text-xs">npm run build</code> (frontend)</li>
+            <li><code className="rounded bg-slate-100 px-1 font-mono text-xs">systemctl restart vod-manager-api vod-manager-worker</code></li>
+          </ol>
+          <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Guncelleme sirasinda panel birkas saniye unavailable olabilir.
+          </p>
+        </div>
+        {lastChecked && (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+            Son kontrol: {lastChecked}
+          </div>
+        )}
       </div>
     </div>
   )
