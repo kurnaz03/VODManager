@@ -83,6 +83,12 @@ def apply_update() -> dict:
         raise RuntimeError(msg)
     logger.info("git pull tamamlandi: %s", out)
 
+    # Fix dist folder permissions before build
+    dist_dir = FRONTEND_DIR / "dist"
+    _run(["chown", "-R", "root:root", str(dist_dir)], timeout=15)
+    _run(["chmod", "-R", "755", str(dist_dir)], timeout=15)
+    logger.info("dist klasoru izinleri duzeltildi")
+
     # npm run build
     rc, out, err = _run(["npm", "run", "build"], cwd=FRONTEND_DIR, timeout=300)
     if rc != 0:
