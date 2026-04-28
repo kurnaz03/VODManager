@@ -47,7 +47,6 @@ const groups = [
           { to: '/downloads', label: 'Downloader', icon: Download },
           { to: '/movies', label: 'Movies', icon: Film },
           { to: '/series', label: 'Series', icon: Tv },
-          { to: '/tv', label: 'TV', icon: MonitorDot },
           { to: '/tv-channels', label: 'TV Kanallari', icon: MonitorPlay },
           { to: '/radio', label: 'Radyo', icon: Radio },
           { to: '/categories', label: 'Kategoriler', icon: FolderKanban },
@@ -65,7 +64,7 @@ const groups = [
   },
 ]
 
-const ICERIK_PATHS = ['/downloads', '/movies', '/series', '/tv', '/tv-channels', '/radio', '/categories', '/transcode', '/playlists', '/bouquets']
+const ICERIK_PATHS = ['/downloads', '/movies', '/series', '/tv-channels', '/radio', '/categories', '/transcode', '/playlists', '/bouquets']
 
 export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: SidebarProps) {
   const location = useLocation()
