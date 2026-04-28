@@ -46,6 +46,14 @@ def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> str
 def ensure_pki_initialized(cfg: VpnServerConfig) -> None:
     """Ensure easy-rsa PKI is set up: init-pki, CA, server cert, DH, ta.key."""
     easy_rsa = Path(cfg.easy_rsa_dir)
+
+    if not easy_rsa.exists():
+        raise RuntimeError(
+            f"easy-rsa dizini bulunamadi: {cfg.easy_rsa_dir}\n"
+            "Sunucuda easy-rsa kurmak icin: apt install -y easy-rsa\n"
+            "Kurulumun ardından VPN ayarlarından easy-rsa dizinini guncelleyin."
+        )
+
     pki = easy_rsa / "pki"
     env = os.environ.copy()
     env.setdefault("EASYRSA_BATCH", "1")

@@ -20,7 +20,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip python3-dev \
     postgresql postgresql-contrib redis-server nginx \
-    ffmpeg git curl build-essential libpq-dev
+    ffmpeg git curl build-essential libpq-dev \
+    openvpn easy-rsa
 
 echo "[2/10] Node.js 20 kuruluyor..."
 if ! command -v node &>/dev/null; then

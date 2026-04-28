@@ -256,7 +256,7 @@ def check_server(db: Session, server_id: int) -> dict[str, Any]:
     )
     try:
         result = test_connection_payload(payload)
-        server.status = ServerStatus.online if server.server_type == ServerType.main else ServerStatus.offline
+        server.status = ServerStatus.online
         server.os_info = result.get("os_info")
         server.cpu_info = result.get("cpu_info")
         server.ram_total = result.get("ram_total")
@@ -265,7 +265,7 @@ def check_server(db: Session, server_id: int) -> dict[str, Any]:
         db.commit()
         return result
     except HTTPException as exc:
-        server.status = ServerStatus.error if server.server_type == ServerType.loadbalancer else ServerStatus.offline
+        server.status = ServerStatus.error
         db.add(server)
         db.commit()
         raise exc

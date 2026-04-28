@@ -303,10 +303,6 @@ function CreateClientModal({ onClose, onCreate, isPending, error }: CreateClient
             </div>
           )}
 
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-            Sertifika olusturma islemi sunucuda easy-rsa gerektirir. Ilk istek birkas saniye surebilir.
-          </div>
-
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" className="secondary-button" onClick={onClose}>
               Iptal
