@@ -9,6 +9,11 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 
 
 def _run(cmd: list[str], cwd: Path = PROJECT_ROOT, timeout: int = 60) -> tuple[int, str, str]:
+    env = {
+        "PATH": "/var/www/vod-manager/venv/bin:/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/root",
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
     try:
         result = subprocess.run(
             cmd,
@@ -16,6 +21,7 @@ def _run(cmd: list[str], cwd: Path = PROJECT_ROOT, timeout: int = 60) -> tuple[i
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -65,6 +71,9 @@ def apply_update() -> dict:
     old_commit = old_commit[:12]
 
     logger.info("Guncelleme basliyor: mevcut commit=%s", old_commit)
+
+    # Stash any local changes (deploy edits etc.)
+    _run(["git", "stash"], timeout=15)
 
     # git pull
     rc, out, err = _run(["git", "pull", "origin", "main"], timeout=120)
