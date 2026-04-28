@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,7 +15,7 @@ from app.modules.content.models import (
 from app.modules.iptv_users.models import IptvUser, UserBouquet
 from app.modules.playlist.models import Playlist
 from app.modules.connections import service as conn_svc
-from app.modules.tv.models import TvChannel
+from app.modules.tv.models import TvChannel, TvChannelBouquet
 from app.modules.tv import stream_service as tv_stream
 
 router = APIRouter()
@@ -80,7 +80,7 @@ def _auth_iptv_user(db: Session, username: str, password: str) -> IptvUser:
 def _check_item_access(db: Session, user: IptvUser, item_type: str, item_id: int) -> bool:
     bouquet_ids = [ub.bouquet_id for ub in (user.bouquets or [])]
     if not bouquet_ids:
-        return False
+        return True
     try:
         it = BouquetItemType(item_type)
     except ValueError:
@@ -95,6 +95,374 @@ def _check_item_access(db: Session, user: IptvUser, item_type: str, item_id: int
         .first()
     )
     return exists is not None
+
+
+def _build_user_info(user: IptvUser) -> dict:
+    exp_date = "9999999999"
+    if user.expiry_date:
+        exp = user.expiry_date
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        exp_date = str(int(exp.timestamp()))
+    created = str(int(user.created_at.timestamp())) if user.created_at else "0"
+    return {
+        "username": user.username,
+        "password": user.password,
+        "message": "Welcome",
+        "auth": 1,
+        "status": "Active",
+        "exp_date": exp_date,
+        "is_trial": "1" if user.is_trial else "0",
+        "active_cons": str(user.max_connections or 1),
+        "created_at": created,
+        "max_connections": str(user.max_connections or 1),
+        "allowed_output_formats": ["m3u8", "ts", "rtmp"],
+    }
+
+
+def _build_server_info() -> dict:
+    now = datetime.now()
+    return {
+        "url": SERVER_HOST,
+        "port": str(SERVER_PORT),
+        "https_port": "443",
+        "server_protocol": "http",
+        "rtmp_port": "1935",
+        "timezone": "Europe/Istanbul",
+        "timestamp_now": int(now.timestamp()),
+        "time_now": now.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def _get_user_bouquet_ids(user: IptvUser, db: Session) -> list[int]:
+    return [ub.bouquet_id for ub in (user.bouquets or [])]
+
+
+@router.get("/player_api.php", tags=["stream"])
+def player_api(
+    username: str = Query(...),
+    password: str = Query(...),
+    action: str = Query(None),
+    series_id: int = Query(None),
+    vod_id: int = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = _auth_iptv_user(db, username, password)
+    bouquet_ids = _get_user_bouquet_ids(user, db)
+
+    # No action -> user info + server info
+    if not action:
+        return JSONResponse({
+            "user_info": _build_user_info(user),
+            "server_info": _build_server_info(),
+        })
+
+    # ── Categories ────────────────────────────────────────────────────────────
+    if action in ("get_live_categories", "get_vod_categories", "get_series_categories"):
+        if not bouquet_ids:
+            bouquets = db.query(Bouquet).filter(Bouquet.is_active == True).all()
+        else:
+            bouquets = db.query(Bouquet).filter(Bouquet.id.in_(bouquet_ids), Bouquet.is_active == True).all()
+        result = [
+            {"category_id": str(b.id), "category_name": b.name, "parent_id": 0}
+            for b in bouquets
+        ]
+        if not result:
+            result = [{"category_id": "1", "category_name": "All", "parent_id": 0}]
+        return JSONResponse(result)
+
+    # ── Live streams ──────────────────────────────────────────────────────────
+    if action == "get_live_streams":
+        result = []
+        idx = 1
+        if bouquet_ids:
+            tv_items = (
+                db.query(TvChannelBouquet)
+                .filter(TvChannelBouquet.bouquet_id.in_(bouquet_ids))
+                .order_by(TvChannelBouquet.bouquet_id.asc(), TvChannelBouquet.position.asc())
+                .all()
+            )
+            for tbi in tv_items:
+                ch = db.query(TvChannel).filter(TvChannel.id == tbi.tv_channel_id, TvChannel.is_active == True).first()
+                if ch is None:
+                    continue
+                result.append({
+                    "num": idx,
+                    "name": ch.name,
+                    "stream_type": "live",
+                    "stream_id": ch.id,
+                    "stream_icon": ch.logo_url or "",
+                    "epg_channel_id": ch.epg_channel_id or str(ch.id),
+                    "added": "0",
+                    "category_id": str(tbi.bouquet_id),
+                    "custom_sid": "",
+                    "tv_archive": 0,
+                    "direct_source": "",
+                    "tv_archive_duration": 0,
+                })
+                idx += 1
+        if not result:
+            channels = db.query(TvChannel).filter(TvChannel.is_active == True).all()
+            for ch in channels:
+                result.append({
+                    "num": idx,
+                    "name": ch.name,
+                    "stream_type": "live",
+                    "stream_id": ch.id,
+                    "stream_icon": ch.logo_url or "",
+                    "epg_channel_id": ch.epg_channel_id or str(ch.id),
+                    "added": "0",
+                    "category_id": "1",
+                    "custom_sid": "",
+                    "tv_archive": 0,
+                    "direct_source": "",
+                    "tv_archive_duration": 0,
+                })
+                idx += 1
+        return JSONResponse(result)
+
+    # ── VOD streams ───────────────────────────────────────────────────────────
+    if action == "get_vod_streams":
+        result = []
+        idx = 1
+        if bouquet_ids:
+            items = (
+                db.query(BouquetItem)
+                .filter(
+                    BouquetItem.bouquet_id.in_(bouquet_ids),
+                    BouquetItem.item_type == BouquetItemType.movie,
+                )
+                .order_by(BouquetItem.bouquet_id.asc(), BouquetItem.position.asc())
+                .all()
+            )
+            for item in items:
+                movie = db.query(MovieContent).filter(MovieContent.id == item.item_id).first()
+                if movie is None:
+                    continue
+                result.append({
+                    "num": idx,
+                    "name": movie.title,
+                    "stream_type": "movie",
+                    "stream_id": movie.id,
+                    "stream_icon": movie.poster_url or "",
+                    "rating": str(movie.rating or ""),
+                    "added": "0",
+                    "category_id": str(item.bouquet_id),
+                    "container_extension": "mp4",
+                    "custom_sid": "",
+                    "direct_source": "",
+                })
+                idx += 1
+        if not result:
+            movies = db.query(MovieContent).all()
+            for movie in movies:
+                result.append({
+                    "num": idx,
+                    "name": movie.title,
+                    "stream_type": "movie",
+                    "stream_id": movie.id,
+                    "stream_icon": movie.poster_url or "",
+                    "rating": str(movie.rating or ""),
+                    "added": "0",
+                    "category_id": str(movie.category_id or "1"),
+                    "container_extension": "mp4",
+                    "custom_sid": "",
+                    "direct_source": "",
+                })
+                idx += 1
+        return JSONResponse(result)
+
+    # ── Series list ───────────────────────────────────────────────────────────
+    if action == "get_series":
+        result = []
+        idx = 1
+        if bouquet_ids:
+            items = (
+                db.query(BouquetItem)
+                .filter(
+                    BouquetItem.bouquet_id.in_(bouquet_ids),
+                    BouquetItem.item_type == BouquetItemType.series,
+                )
+                .order_by(BouquetItem.bouquet_id.asc(), BouquetItem.position.asc())
+                .all()
+            )
+            for item in items:
+                series = db.query(SeriesContent).filter(SeriesContent.id == item.item_id).first()
+                if series is None:
+                    continue
+                result.append({
+                    "num": idx,
+                    "name": series.title,
+                    "series_id": series.id,
+                    "cover": series.poster_url or "",
+                    "plot": series.description or "",
+                    "cast": "",
+                    "director": "",
+                    "genre": "",
+                    "releaseDate": str(series.release_year or ""),
+                    "last_modified": "",
+                    "rating": str(series.rating or ""),
+                    "category_id": str(item.bouquet_id),
+                    "backdrop_path": [series.backdrop_url] if series.backdrop_url else [],
+                })
+                idx += 1
+        if not result:
+            all_series = db.query(SeriesContent).all()
+            for series in all_series:
+                result.append({
+                    "num": idx,
+                    "name": series.title,
+                    "series_id": series.id,
+                    "cover": series.poster_url or "",
+                    "plot": series.description or "",
+                    "cast": "",
+                    "director": "",
+                    "genre": "",
+                    "releaseDate": str(series.release_year or ""),
+                    "last_modified": "",
+                    "rating": str(series.rating or ""),
+                    "category_id": str(series.category_id or "1"),
+                    "backdrop_path": [series.backdrop_url] if series.backdrop_url else [],
+                })
+                idx += 1
+        return JSONResponse(result)
+
+    # ── Series info ───────────────────────────────────────────────────────────
+    if action == "get_series_info":
+        if series_id is None:
+            raise HTTPException(status_code=400, detail="series_id required")
+        series = db.query(SeriesContent).filter(SeriesContent.id == series_id).first()
+        if series is None:
+            raise HTTPException(status_code=404, detail="Series not found")
+        seasons = (
+            db.query(SeriesSeason)
+            .filter(SeriesSeason.series_id == series_id)
+            .order_by(SeriesSeason.season_number.asc())
+            .all()
+        )
+        seasons_info = [
+            {
+                "season_number": s.season_number,
+                "name": f"Season {s.season_number}",
+                "episode_count": len(s.episodes),
+            }
+            for s in seasons
+        ]
+        info = {
+            "name": series.title,
+            "cover": series.poster_url or "",
+            "plot": series.description or "",
+            "cast": "",
+            "director": "",
+            "genre": "",
+            "releaseDate": str(series.release_year or ""),
+            "rating": str(series.rating or ""),
+            "backdrop_path": [series.backdrop_url] if series.backdrop_url else [],
+        }
+        episodes_by_season: dict = {}
+        for season in seasons:
+            eps = (
+                db.query(SeriesEpisode)
+                .filter(SeriesEpisode.season_id == season.id)
+                .order_by(SeriesEpisode.episode_number.asc())
+                .all()
+            )
+            episodes_by_season[str(season.season_number)] = [
+                {
+                    "id": str(ep.id),
+                    "episode_num": ep.episode_number,
+                    "title": ep.title or f"Episode {ep.episode_number}",
+                    "container_extension": "mp4",
+                    "info": {"duration_secs": 0, "duration": ""},
+                    "custom_sid": "",
+                    "added": "",
+                    "season": season.season_number,
+                    "direct_source": "",
+                }
+                for ep in eps
+            ]
+        return JSONResponse({
+            "seasons": seasons_info,
+            "info": info,
+            "episodes": episodes_by_season,
+        })
+
+    # ── VOD info ──────────────────────────────────────────────────────────────
+    if action == "get_vod_info":
+        if vod_id is None:
+            raise HTTPException(status_code=400, detail="vod_id required")
+        movie = db.query(MovieContent).filter(MovieContent.id == vod_id).first()
+        if movie is None:
+            raise HTTPException(status_code=404, detail="Movie not found")
+        return JSONResponse({
+            "info": {
+                "tmdb_id": movie.tmdb_id,
+                "name": movie.title,
+                "o_name": movie.title,
+                "cover_big": movie.poster_url or "",
+                "movie_image": movie.poster_url or "",
+                "releasedate": str(movie.release_year or ""),
+                "rating": str(movie.rating or ""),
+                "description": movie.description or "",
+                "cast": "",
+                "director": "",
+                "genre": "",
+                "backdrop_path": [movie.backdrop_url] if movie.backdrop_url else [],
+                "duration_secs": 0,
+                "duration": "",
+                "bitrate": movie.audio_bitrate or 0,
+                "video": {"width": 0, "height": 0, "codec": ""},
+                "audio": {"codec": "", "bitrate": ""},
+            },
+            "movie_data": {
+                "stream_id": movie.id,
+                "name": movie.title,
+                "added": "0",
+                "category_id": str(movie.category_id or ""),
+                "container_extension": "mp4",
+                "custom_sid": "",
+                "direct_source": "",
+            },
+        })
+
+    raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+
+
+@router.get("/panel_api.php", tags=["stream"])
+def panel_api(
+    username: str = Query(...),
+    password: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    user = _auth_iptv_user(db, username, password)
+    bouquet_ids = _get_user_bouquet_ids(user, db)
+
+    # Build available_channels list (live streams)
+    available_channels = []
+    if bouquet_ids:
+        tv_items = (
+            db.query(TvChannelBouquet)
+            .filter(TvChannelBouquet.bouquet_id.in_(bouquet_ids))
+            .order_by(TvChannelBouquet.position.asc())
+            .all()
+        )
+        for tbi in tv_items:
+            ch = db.query(TvChannel).filter(TvChannel.id == tbi.tv_channel_id, TvChannel.is_active == True).first()
+            if ch is None:
+                continue
+            available_channels.append({
+                "stream_id": ch.id,
+                "name": ch.name,
+                "stream_icon": ch.logo_url or "",
+                "epg_channel_id": ch.epg_channel_id or str(ch.id),
+                "category_id": str(tbi.bouquet_id),
+            })
+
+    return JSONResponse({
+        "user_info": _build_user_info(user),
+        "server_info": _build_server_info(),
+        "available_channels": available_channels,
+    })
 
 
 @router.get("/get.php", response_class=PlainTextResponse, tags=["stream"])
@@ -213,8 +581,8 @@ def get_m3u_plus(
                 lines.append(stream_url)
 
     # TV Channels (from tv_channel_bouquets)
-    from app.modules.tv.models import TvChannel, TvChannelBouquet
     bouquet_ids = [ub.bouquet_id for ub in (user.bouquets or [])]
+    tv_lines_added = False
     if bouquet_ids:
         tv_bouquet_items = (
             db.query(TvChannelBouquet)
@@ -237,6 +605,80 @@ def get_m3u_plus(
             )
             lines.append(extinf)
             lines.append(stream_url)
+            tv_lines_added = True
+
+    # Fallback: no bouquets or empty tv_channel_bouquets -> add all content
+    if not bouquet_ids or (len(lines) <= 1):
+        # TV channels fallback
+        if not tv_lines_added:
+            channels = db.query(TvChannel).filter(TvChannel.is_active == True).all()
+            for ch in channels:
+                logo = ch.logo_url or ""
+                epg_id = ch.epg_channel_id or ch.id
+                stream_url = f"{base}/live/tv/{username}/{password}/{ch.id}.ts"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{epg_id}" tvg-name="{ch.name}" '
+                    f'tvg-logo="{logo}" group-title="TV",{ch.name}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
+        # Movies fallback
+        movies = db.query(MovieContent).all()
+        for movie in movies:
+            logo = movie.poster_url or ""
+            stream_url = f"{base}/movie/{username}/{password}/{movie.id}.mp4"
+            extinf = (
+                f'#EXTINF:-1 tvg-id="{movie.id}" tvg-name="{movie.title}" '
+                f'tvg-logo="{logo}" group-title="Movies",{movie.title}'
+            )
+            lines.append(extinf)
+            lines.append(stream_url)
+        # Series fallback
+        all_series = db.query(SeriesContent).all()
+        for series_obj in all_series:
+            logo = series_obj.poster_url or ""
+            seasons = (
+                db.query(SeriesSeason)
+                .filter(SeriesSeason.series_id == series_obj.id)
+                .order_by(SeriesSeason.season_number.asc())
+                .all()
+            )
+            emitted = False
+            for season in seasons:
+                episodes = (
+                    db.query(SeriesEpisode)
+                    .filter(
+                        SeriesEpisode.season_id == season.id,
+                        or_(
+                            SeriesEpisode.source_url.isnot(None),
+                            SeriesEpisode.file_path.isnot(None),
+                        ),
+                    )
+                    .order_by(SeriesEpisode.episode_number.asc())
+                    .all()
+                )
+                for ep in episodes:
+                    has_file = ep.file_path and ep.file_path.strip() != ""
+                    has_url = ep.source_url and ep.source_url.strip() != ""
+                    if not has_file and not has_url:
+                        continue
+                    sn = season.season_number or 0
+                    en = ep.episode_number or 0
+                    ep_label = f"{series_obj.title} S{sn:02d}E{en:02d}"
+                    ep_extinf = (
+                        f'#EXTINF:-1 tvg-id="{ep.id}" tvg-name="{ep_label}" '
+                        f'tvg-logo="{logo}" group-title="Series",{ep_label}'
+                    )
+                    lines.append(ep_extinf)
+                    lines.append(f"{base}/series/{username}/{password}/{ep.id}.mp4")
+                    emitted = True
+            if not emitted:
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{series_obj.id}" tvg-name="{series_obj.title}" '
+                    f'tvg-logo="{logo}" group-title="Series",{series_obj.title}'
+                )
+                lines.append(extinf)
+                lines.append(f"{base}/series/{username}/{password}/{series_obj.id}.mp4")
 
     return "\n".join(lines) + "\n"
 

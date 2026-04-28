@@ -469,7 +469,7 @@ def _build_output_template(item: DownloadQueue) -> Path:
     else:
         target_directory = settings.movies_uploads_path / str(item.category_id)
     target_directory.mkdir(parents=True, exist_ok=True)
-    return target_directory / f"{item.file_number:05d}.%(ext)s"
+    return target_directory / f"{item.id:05d}.%(ext)s"
 
 
 def _get_tun0_address() -> str | None:
@@ -591,7 +591,7 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
         output_directory = settings.movies_uploads_path / f"series_{item.series_id}"
     else:
         output_directory = settings.movies_uploads_path / str(item.category_id)
-    candidates = sorted(output_directory.glob(f"{item.file_number:05d}.*"))
+    candidates = sorted(output_directory.glob(f"{item.id:05d}.*"))
     output_file = candidates[0] if candidates else None
     if output_file is None:
         raise RuntimeError("Indirilen dosya bulunamadi")
