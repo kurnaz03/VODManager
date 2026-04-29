@@ -433,3 +433,39 @@ class MusicPlaylistOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# ── Music Download Schemas ────────────────────────────────────────────────────
+
+class MusicDownloadRequest(BaseModel):
+    url: str
+    title: str | None = None
+    artist: str | None = None
+    category_id: int | None = None
+    vpn_client_id: int | None = None
+
+
+class MusicDownloadResponse(BaseModel):
+    task_id: str
+    status: str
+
+
+class MusicDownloadStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    result: dict | None = None
+
+
+# ── Visual Upload Response ────────────────────────────────────────────────────
+
+class VisualUploadResponse(BaseModel):
+    filename: str
+    url: str
+
+
+# ── Music Upload Response ─────────────────────────────────────────────────────
+
+class MusicUploadResponse(BaseModel):
+    filename: str
+    file_path: str
+    track: MusicTrackOut | None = None
+

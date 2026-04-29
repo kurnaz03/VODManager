@@ -1,7 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,9 @@ from app.modules.content.schemas import (
     MovieContentCreate,
     MovieContentResponse,
     MovieContentUpdate,
+    MusicDownloadRequest,
+    MusicDownloadResponse,
+    MusicDownloadStatusResponse,
     MusicPlaylistCreate,
     MusicPlaylistItemCreate,
     MusicPlaylistItemOut,
@@ -35,6 +38,7 @@ from app.modules.content.schemas import (
     MusicTrackCreate,
     MusicTrackOut,
     MusicTrackUpdate,
+    MusicUploadResponse,
     RadioContentCreate,
     RadioContentResponse,
     RadioContentUpdate,
@@ -46,6 +50,7 @@ from app.modules.content.schemas import (
     StreamContentCreate,
     StreamContentResponse,
     StreamContentUpdate,
+    VisualUploadResponse,
 )
 
 
@@ -369,3 +374,127 @@ def stop_music_broadcast(playlist_id: int, db: Session = Depends(get_db)):
 def music_broadcast_status(playlist_id: int, db: Session = Depends(get_db)):
     from app.modules.content.music_broadcast import get_music_playlist_status
     return get_music_playlist_status(db, playlist_id)
+
+
+# ── Music YouTube Download ─────────────────────────────────────────────────────
+
+ALLOWED_MUSIC_EXTENSIONS = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
+ALLOWED_VISUAL_EXTENSIONS = {".mp4", ".webm", ".jpg", ".jpeg", ".png", ".gif"}
+MUSIC_UPLOADS_ROOT = Path("/var/www/vod-manager/shared/uploads/music")
+VISUAL_UPLOADS_ROOT = Path("/var/www/vod-manager/shared/uploads/visuals")
+
+
+@router.post("/music/download-youtube", response_model=MusicDownloadResponse, status_code=status.HTTP_202_ACCEPTED, tags=["music"])
+def music_download_youtube(payload: MusicDownloadRequest):
+    """YouTube URL'sinden MP3 indir (async Celery task)."""
+    from app.modules.content.tasks import download_music_youtube
+
+    task = download_music_youtube.delay(
+        url=payload.url,
+        title=payload.title,
+        artist=payload.artist,
+        category_id=payload.category_id,
+        vpn_client_id=payload.vpn_client_id,
+    )
+    return MusicDownloadResponse(task_id=task.id, status="queued")
+
+
+@router.get("/music/download-status/{task_id}", response_model=MusicDownloadStatusResponse, tags=["music"])
+def music_download_status(task_id: str):
+    """Celery task durumunu sorgula."""
+    from app.core.celery_app import celery_app
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id, app=celery_app)
+    state = result.state  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+    task_result = None
+    if result.ready():
+        try:
+            task_result = result.result if isinstance(result.result, dict) else {"value": str(result.result)}
+        except Exception:
+            task_result = None
+    return MusicDownloadStatusResponse(task_id=task_id, status=state, result=task_result)
+
+
+# ── Music File Upload ──────────────────────────────────────────────────────────
+
+@router.post("/music/upload-file", response_model=MusicUploadResponse, status_code=status.HTTP_201_CREATED, tags=["music"])
+async def upload_music_file(
+    file: UploadFile = File(...),
+    title: str | None = Form(default=None),
+    artist: str | None = Form(default=None),
+    category_id: int | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Muzik dosyasi yukle (mp3, wav, flac, ogg, m4a)."""
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dosya adi bos olamaz")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_MUSIC_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Desteklenmeyen dosya formati: {ext}. Izin verilenler: {', '.join(ALLOWED_MUSIC_EXTENSIONS)}",
+        )
+
+    MUSIC_UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
+    dest_path = MUSIC_UPLOADS_ROOT / file.filename
+    # Ayni isimde dosya varsa -1, -2 ekle
+    counter = 1
+    while dest_path.exists():
+        dest_path = MUSIC_UPLOADS_ROOT / f"{Path(file.filename).stem}_{counter}{ext}"
+        counter += 1
+
+    content = await file.read()
+    dest_path.write_bytes(content)
+
+    track_out = None
+    if title:
+        track = service.create_music_track(
+            db,
+            MusicTrackCreate(
+                title=title,
+                artist=artist,
+                file_path=str(dest_path),
+                category_id=category_id,
+            ),
+        )
+        track_out = MusicTrackOut.model_validate(track)
+
+    return MusicUploadResponse(
+        filename=dest_path.name,
+        file_path=str(dest_path),
+        track=track_out,
+    )
+
+
+# ── Visual File Upload ─────────────────────────────────────────────────────────
+
+@router.post("/upload-visual", response_model=VisualUploadResponse, status_code=status.HTTP_201_CREATED, tags=["visuals"])
+async def upload_visual_file(
+    file: UploadFile = File(...),
+):
+    """Video veya resim yukle (mp4, webm, jpg, jpeg, png, gif). /uploads/visuals/filename URL dondurur."""
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dosya adi bos olamaz")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_VISUAL_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Desteklenmeyen dosya formati: {ext}. Izin verilenler: {', '.join(ALLOWED_VISUAL_EXTENSIONS)}",
+        )
+
+    VISUAL_UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
+    dest_path = VISUAL_UPLOADS_ROOT / file.filename
+    # Ayni isimde dosya varsa -1, -2 ekle
+    counter = 1
+    while dest_path.exists():
+        dest_path = VISUAL_UPLOADS_ROOT / f"{Path(file.filename).stem}_{counter}{ext}"
+        counter += 1
+
+    content = await file.read()
+    dest_path.write_bytes(content)
+
+    url = f"/uploads/visuals/{dest_path.name}"
+    return VisualUploadResponse(filename=dest_path.name, url=url)
