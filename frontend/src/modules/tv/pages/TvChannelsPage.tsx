@@ -321,6 +321,13 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+}
+
 export default function TvChannelsPage() {
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
@@ -461,7 +468,9 @@ export default function TvChannelsPage() {
               type="button"
               onClick={() => setShowFilters((v) => !v)}
               title="Search"
-              className="flex items-center justify-center w-9 h-9 rounded border bg-emerald-50 border-emerald-300 text-emerald-600 hover:bg-emerald-100 transition"
+              className={`flex items-center justify-center w-9 h-9 rounded border transition ${
+                showFilters ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-emerald-50 border-emerald-300 text-emerald-600 hover:bg-emerald-100'
+              }`}
             >
               <Search size={16} />
             </button>
@@ -486,15 +495,6 @@ export default function TvChannelsPage() {
             >
               <Plus size={13} />
               Add Stream
-            </button>
-            {/* Create */}
-            <button
-              type="button"
-              onClick={() => { setEditChannel(null); setModalOpen(true) }}
-              className="flex items-center gap-1.5 rounded bg-blue-600 hover:bg-blue-500 border border-blue-600 px-3 py-2 text-xs font-semibold text-white transition"
-            >
-              <Plus size={13} />
-              Create
             </button>
           </div>
         </div>
@@ -664,7 +664,7 @@ export default function TvChannelsPage() {
                       {ch.is_active ? (
                         <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          00h 00m 00s
+                          {ch.uptime_seconds != null ? formatUptime(ch.uptime_seconds) : '00h 00m 00s'}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-200">
@@ -680,14 +680,16 @@ export default function TvChannelsPage() {
                         <button
                           type="button"
                           title="Stop"
+                          onClick={() => tvChannelsApi.stop(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
                           className="flex items-center justify-center w-7 h-7 rounded bg-blue-500 hover:bg-blue-600 text-white transition"
                         >
                           <StopCircle size={12} />
                         </button>
-                        {/* Start/Restart - dark square */}
+                        {/* Start - dark square */}
                         <button
                           type="button"
                           title="Start"
+                          onClick={() => tvChannelsApi.start(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
                           className="flex items-center justify-center w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-white transition"
                         >
                           <Square size={12} />
@@ -696,6 +698,7 @@ export default function TvChannelsPage() {
                         <button
                           type="button"
                           title="Reload"
+                          onClick={() => tvChannelsApi.restart(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
                           className="flex items-center justify-center w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 text-white transition"
                         >
                           <RotateCcw size={12} />

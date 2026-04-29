@@ -39,6 +39,8 @@ export interface TvChannel {
   on_demand_timeout: number
   on_demand_server_id: number | null
   on_demand_server_name: string | null
+  started_at: string | null
+  uptime_seconds: number | null
 }
 
 export interface TvChannelCreate {
@@ -111,6 +113,21 @@ export const tvChannelsApi = {
 
   async test(id: number): Promise<TvChannelTestResult> {
     const r = await api.get<TvChannelTestResult>(`/tv/channels/${id}/test`)
+    return r.data
+  },
+
+  async start(id: number): Promise<TvChannel> {
+    const r = await api.post<TvChannel>(`/tv/channels/${id}/start`)
+    return r.data
+  },
+
+  async stop(id: number): Promise<TvChannel> {
+    const r = await api.post<TvChannel>(`/tv/channels/${id}/stop`)
+    return r.data
+  },
+
+  async restart(id: number): Promise<TvChannel> {
+    const r = await api.post<TvChannel>(`/tv/channels/${id}/restart`)
     return r.data
   },
 }

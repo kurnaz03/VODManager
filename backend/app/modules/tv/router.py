@@ -66,3 +66,27 @@ async def test_channel(
     db: Session = Depends(get_db),
 ):
     return await service.test_channel_stream(db, channel_id)
+
+
+@router.post("/{channel_id}/start", response_model=TvChannelOut)
+def start_channel(
+    channel_id: int,
+    db: Session = Depends(get_db),
+):
+    return service.start_channel(db, channel_id)
+
+
+@router.post("/{channel_id}/stop", response_model=TvChannelOut)
+def stop_channel(
+    channel_id: int,
+    db: Session = Depends(get_db),
+):
+    return service.stop_channel(db, channel_id)
+
+
+@router.post("/{channel_id}/restart", response_model=TvChannelOut)
+def restart_channel(
+    channel_id: int,
+    db: Session = Depends(get_db),
+):
+    return service.restart_channel(db, channel_id)

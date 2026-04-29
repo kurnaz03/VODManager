@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import HTTPException, status
@@ -40,6 +41,16 @@ def _enrich_channel(channel: TvChannel) -> dict:
     od_server = channel.on_demand_server
     od_server_name = od_server.name if od_server else None
 
+    now = datetime.now(timezone.utc)
+    started_at_str = None
+    uptime_seconds = None
+    if channel.started_at is not None:
+        st = channel.started_at
+        if st.tzinfo is None:
+            st = st.replace(tzinfo=timezone.utc)
+        started_at_str = st.isoformat()
+        uptime_seconds = max(0, int((now - st).total_seconds()))
+
     return {
         "id": channel.id,
         "name": channel.name,
@@ -55,6 +66,8 @@ def _enrich_channel(channel: TvChannel) -> dict:
         "on_demand_timeout": channel.on_demand_timeout,
         "on_demand_server_id": channel.on_demand_server_id,
         "on_demand_server_name": od_server_name,
+        "started_at": started_at_str,
+        "uptime_seconds": uptime_seconds,
         "created_at": channel.created_at,
         "updated_at": channel.updated_at,
         "servers": servers_out,
@@ -224,3 +237,33 @@ async def test_channel_stream(db: Session, channel_id: int) -> dict:
             "status_code": None,
             "message": str(e),
         }
+
+
+def start_channel(db: Session, channel_id: int) -> dict:
+    channel = db.query(TvChannel).filter(TvChannel.id == channel_id).first()
+    if channel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kanal bulunamadi")
+    channel.is_active = True
+    channel.started_at = datetime.now(timezone.utc)
+    db.commit()
+    return get_channel(db, channel_id)
+
+
+def stop_channel(db: Session, channel_id: int) -> dict:
+    channel = db.query(TvChannel).filter(TvChannel.id == channel_id).first()
+    if channel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kanal bulunamadi")
+    channel.is_active = False
+    channel.started_at = None
+    db.commit()
+    return get_channel(db, channel_id)
+
+
+def restart_channel(db: Session, channel_id: int) -> dict:
+    channel = db.query(TvChannel).filter(TvChannel.id == channel_id).first()
+    if channel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kanal bulunamadi")
+    channel.is_active = True
+    channel.started_at = datetime.now(timezone.utc)
+    db.commit()
+    return get_channel(db, channel_id)

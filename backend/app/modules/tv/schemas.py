@@ -93,6 +93,8 @@ class TvChannelOut(BaseModel):
     on_demand_timeout: int
     on_demand_server_id: Optional[int]
     on_demand_server_name: Optional[str] = None
+    started_at: Optional[str] = None
+    uptime_seconds: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     servers: List[TvChannelServerOut] = []

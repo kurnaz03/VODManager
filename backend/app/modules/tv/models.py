@@ -20,6 +20,7 @@ class TvChannel(Base):
     on_demand = Column(Boolean, nullable=False, default=False)
     on_demand_timeout = Column(Integer, nullable=False, default=30)
     on_demand_server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
