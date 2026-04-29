@@ -271,7 +271,7 @@ export default function TranscodeProfilesPage() {
 
       <section className="glass-panel p-4 sm:p-6">
         <div className="table-shell overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{minWidth: '700px'}}>
             <thead>
               <tr className="table-head text-left">
                 <th className="px-4 py-3 font-semibold text-slate-500">Logo</th>
@@ -453,7 +453,7 @@ function ProfileFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-8">
       <div className="w-full max-w-3xl rounded-3xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-100 px-4 py-4 gap-3 sm:px-6">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
               {isEdit ? 'Profil Duzenle' : 'Yeni Transcode Profili'}
@@ -491,12 +491,12 @@ function ProfileFormModal({
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6">
 
           {/* ── Video Tab ── */}
           {activeTab === 'video' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Video Codec *</label>
                   <select className="panel-select" value={form.video_codec} onChange={(e) => set('video_codec', e.target.value as TranscodeProfileCreate['video_codec'])}>
@@ -511,7 +511,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Genislik (px)</label>
                   <input type="number" className="panel-input" value={form.video_width ?? ''} onChange={(e) => set('video_width', e.target.value ? Number(e.target.value) : null)} placeholder="1920" />
@@ -522,7 +522,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="panel-label">CRF (0-51, dusuk=kaliteli)</label>
                   <input type="number" min={0} max={51} className="panel-input" value={form.video_crf ?? ''} onChange={(e) => set('video_crf', e.target.value ? Number(e.target.value) : null)} placeholder="18" />
@@ -537,7 +537,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Sabit Bitrate (VBR icin bos birakin)</label>
                   <input className="panel-input" value={form.video_bitrate ?? ''} onChange={(e) => set('video_bitrate', e.target.value as never)} placeholder="4000k" />
@@ -550,7 +550,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="panel-label">Profile</label>
                   <select className="panel-select" value={form.video_profile ?? ''} onChange={(e) => set('video_profile', (e.target.value || null) as TranscodeProfileCreate['video_profile'])}>
@@ -571,7 +571,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="panel-label">Tune</label>
                   <select className="panel-select" value={form.video_tune ?? ''} onChange={(e) => set('video_tune', (e.target.value || null) as TranscodeProfileCreate['video_tune'])}>
@@ -590,7 +590,7 @@ function ProfileFormModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="panel-label">GOP Boyutu (-g)</label>
                   <input type="number" className="panel-input" value={form.video_gop_size ?? ''} onChange={(e) => set('video_gop_size', e.target.value ? Number(e.target.value) : null)} placeholder="50" />
@@ -632,7 +632,7 @@ function ProfileFormModal({
           {/* ── Ses Tab ── */}
           {activeTab === 'audio' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Audio Codec *</label>
                   <select className="panel-select" value={form.audio_codec} onChange={(e) => set('audio_codec', e.target.value as TranscodeProfileCreate['audio_codec'])}>
@@ -646,7 +646,7 @@ function ProfileFormModal({
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Ornek Hizi (Hz)</label>
                   <select className="panel-select" value={form.audio_sample_rate ?? ''} onChange={(e) => set('audio_sample_rate', e.target.value ? Number(e.target.value) : null)}>

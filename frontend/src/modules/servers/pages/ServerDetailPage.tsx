@@ -114,7 +114,7 @@ export default function ServerDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <div className="glass-panel p-5">
           <div className="icon-chip mb-4"><Activity size={18} /></div>
           <div className="text-sm text-slate-500">CPU Kullanimi</div>
@@ -141,7 +141,7 @@ export default function ServerDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
         <div className="glass-panel p-6">
           <div className="mb-5">
             <h2 className="text-xl font-semibold text-slate-900">Son 24 saat metrik akisi</h2>

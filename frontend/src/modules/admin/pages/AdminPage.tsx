@@ -105,7 +105,7 @@ function UserModal({ editUser, onClose, onSaved, onError }: UserModalProps) {
               />
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Rol</label>
               <select
@@ -270,7 +270,7 @@ export default function AdminPage() {
               Panel yoneticilerini ve bayileri buradan yonetebilirsiniz.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setShowPwModal(true)} className="secondary-button">
               <Key size={16} />
               Sifre Degistir
@@ -286,7 +286,7 @@ export default function AdminPage() {
       {/* Table */}
       <section className="glass-panel overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{minWidth: '600px'}}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-3">ID</th>

@@ -280,12 +280,12 @@ export default function ServersPage() {
           <div className="text-2xl font-semibold text-slate-900">{summary.main?.ip_address ?? '—'}</div>
           <div className="mt-1 text-sm text-slate-500">Main server adresi</div>
         </div>
-        <div className="glass-panel flex items-center justify-between p-5">
+        <div className="glass-panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm text-slate-500">Yeni dengeleyici ekle</div>
             <div className="mt-1 text-lg font-medium text-slate-900">SSH ile hizli onboarding</div>
           </div>
-          <button type="button" onClick={() => setOpen(true)} className="primary-button">
+          <button type="button" onClick={() => setOpen(true)} className="primary-button w-full sm:w-auto">
             <Plus size={18} />
             Yeni Sunucu
           </button>
@@ -309,8 +309,8 @@ export default function ServersPage() {
             Sunucular yukleniyor...
           </div>
         ) : (
-          <div className="table-shell">
-            <div className="table-head hidden grid-cols-[1.7fr,1.2fr,0.8fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,auto] gap-4 px-5 py-4 lg:grid">
+          <div className="table-shell overflow-x-auto">
+            <div className="table-head hidden grid-cols-[1.7fr,1.2fr,0.8fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,auto] gap-4 px-5 py-4 lg:grid" style={{minWidth: '800px'}}>
               <div>Sunucu</div>
               <div>IP / Tip</div>
               <div>Durum</div>
@@ -326,77 +326,134 @@ export default function ServersPage() {
               {servers.map((server, index) => (
                 <div
                   key={server.id}
-                  className={`grid w-full gap-4 px-5 py-5 lg:grid-cols-[1.7fr,1.2fr,0.8fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,auto] ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+                  className={`w-full px-4 py-4 sm:px-5 sm:py-5 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/servers/${server.id}`)}
-                    className="flex items-center gap-3 min-w-0 text-left"
-                  >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-blue-600">
-                      {server.server_type === 'main' ? <Crown size={20} /> : <ServerCog size={20} />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-base font-semibold text-slate-900">{server.name}</div>
-                        {server.server_type === 'main' && (
-                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-200">
-                            Main
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 truncate text-sm text-slate-500">{server.cpu_info ?? 'Donanim bilgisi bekleniyor'}</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/servers/${server.id}`)}
-                    className="text-left"
-                  >
-                    <div className="text-sm font-medium text-slate-700">{server.ip_address}</div>
-                    <div className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{server.server_type}</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/servers/${server.id}`)}
-                    className="flex items-start lg:items-center"
-                  >
-                    <StatusBadge status={server.status} />
-                  </button>
-                  <MetricBar label="CPU" value={server.latest_metric?.cpu_percent ?? 0} tone="blue" />
-                  <MetricBar label="RAM" value={server.latest_metric?.ram_percent ?? 0} tone="green" />
-                  <MetricBar label="Disk" value={server.latest_metric?.disk_percent ?? 0} tone="amber" />
-                  <MetricBar
-                    label="Net In"
-                    value={Math.min(((server.latest_metric?.network_in_mbps ?? 0) / (server.network_speed ?? 1000)) * 100, 100)}
-                    tone="blue"
-                    displayValue={formatMbps(server.latest_metric?.network_in_mbps ?? 0)}
-                  />
-                  <MetricBar
-                    label="Net Out"
-                    value={Math.min(((server.latest_metric?.network_out_mbps ?? 0) / (server.network_speed ?? 1000)) * 100, 100)}
-                    tone="red"
-                    displayValue={formatMbps(server.latest_metric?.network_out_mbps ?? 0)}
-                  />
-                  <div className="flex items-center justify-end gap-2">
+                  {/* Mobile: card layout */}
+                  <div className="flex items-start justify-between gap-3 lg:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setEditServer(server) }}
-                      className="secondary-button p-2"
-                      title="Duzenle"
+                      onClick={() => navigate(`/servers/${server.id}`)}
+                      className="flex items-center gap-3 min-w-0 text-left flex-1"
                     >
-                      <Pencil size={15} />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-blue-600">
+                        {server.server_type === 'main' ? <Crown size={18} /> : <ServerCog size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-slate-900">{server.name}</span>
+                          {server.server_type === 'main' && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">Main</span>
+                          )}
+                          <StatusBadge status={server.status} />
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">{server.ip_address} · {server.server_type}</div>
+                      </div>
                     </button>
-                    {server.server_type !== 'main' && (
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmServer(server) }}
-                        className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
-                        title="Sil"
+                        onClick={(e) => { e.stopPropagation(); setEditServer(server) }}
+                        className="secondary-button p-2"
+                        title="Duzenle"
                       >
-                        <Trash2 size={15} />
+                        <Pencil size={14} />
                       </button>
-                    )}
+                      {server.server_type !== 'main' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmServer(server) }}
+                          className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
+                          title="Sil"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:hidden">
+                    <MetricBar label="CPU" value={server.latest_metric?.cpu_percent ?? 0} tone="blue" />
+                    <MetricBar label="RAM" value={server.latest_metric?.ram_percent ?? 0} tone="green" />
+                    <MetricBar label="Disk" value={server.latest_metric?.disk_percent ?? 0} tone="amber" />
+                    <MetricBar
+                      label="Net Out"
+                      value={Math.min(((server.latest_metric?.network_out_mbps ?? 0) / (server.network_speed ?? 1000)) * 100, 100)}
+                      tone="red"
+                      displayValue={formatMbps(server.latest_metric?.network_out_mbps ?? 0)}
+                    />
+                  </div>
+
+                  {/* Desktop: table row layout */}
+                  <div className="hidden lg:grid lg:grid-cols-[1.7fr,1.2fr,0.8fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,auto] gap-4 items-center">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/servers/${server.id}`)}
+                      className="flex items-center gap-3 min-w-0 text-left"
+                    >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-blue-600">
+                        {server.server_type === 'main' ? <Crown size={20} /> : <ServerCog size={20} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="truncate text-base font-semibold text-slate-900">{server.name}</div>
+                          {server.server_type === 'main' && (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-200">
+                              Main
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 truncate text-sm text-slate-500">{server.cpu_info ?? 'Donanim bilgisi bekleniyor'}</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/servers/${server.id}`)}
+                      className="text-left"
+                    >
+                      <div className="text-sm font-medium text-slate-700">{server.ip_address}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{server.server_type}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/servers/${server.id}`)}
+                      className="flex items-center"
+                    >
+                      <StatusBadge status={server.status} />
+                    </button>
+                    <MetricBar label="CPU" value={server.latest_metric?.cpu_percent ?? 0} tone="blue" />
+                    <MetricBar label="RAM" value={server.latest_metric?.ram_percent ?? 0} tone="green" />
+                    <MetricBar label="Disk" value={server.latest_metric?.disk_percent ?? 0} tone="amber" />
+                    <MetricBar
+                      label="Net In"
+                      value={Math.min(((server.latest_metric?.network_in_mbps ?? 0) / (server.network_speed ?? 1000)) * 100, 100)}
+                      tone="blue"
+                      displayValue={formatMbps(server.latest_metric?.network_in_mbps ?? 0)}
+                    />
+                    <MetricBar
+                      label="Net Out"
+                      value={Math.min(((server.latest_metric?.network_out_mbps ?? 0) / (server.network_speed ?? 1000)) * 100, 100)}
+                      tone="red"
+                      displayValue={formatMbps(server.latest_metric?.network_out_mbps ?? 0)}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setEditServer(server) }}
+                        className="secondary-button p-2"
+                        title="Duzenle"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      {server.server_type !== 'main' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmServer(server) }}
+                          className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
+                          title="Sil"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

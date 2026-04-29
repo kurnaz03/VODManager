@@ -77,7 +77,7 @@ export default function VpnClientsPage() {
               OpenVPN istemci sertifikasi olusturun, indirin ve yonetin. Her istemci icin benzersiz .ovpn dosyasi uretilir.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-2">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
               <div className="text-2xl font-semibold text-slate-900">{clients.length}</div>
               <div className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-500">Toplam</div>
@@ -128,7 +128,7 @@ export default function VpnClientsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{minWidth: '600px'}}>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-5 py-3">Ad</th>
@@ -364,7 +364,7 @@ function ServerConfigModal({ onClose }: { onClose: () => void }) {
           className="space-y-3"
           onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="panel-label">Sunucu IP</label>
               <input className="panel-input" defaultValue={config.server_ip} {...register('server_ip')} />

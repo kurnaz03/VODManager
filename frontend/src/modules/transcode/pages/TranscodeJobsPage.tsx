@@ -369,7 +369,7 @@ export default function TranscodeJobsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {/* Toast */}
       {toast && (
         <div
@@ -730,7 +730,7 @@ export default function TranscodeJobsPage() {
         {/* ── RIGHT: Queue List ── */}
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col">
           {/* Queue header */}
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 px-4 py-4 flex-shrink-0 gap-2">
             <h2 className="text-base font-semibold text-slate-700">
               Transcode Kuyrugu
               <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
@@ -764,7 +764,7 @@ export default function TranscodeJobsPage() {
             <div className="p-10 text-center text-sm text-slate-400">Kuyrukta job yok.</div>
           ) : (
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" style={{minWidth: '600px'}}>
                 <thead>
                   <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     <th className="px-4 py-3">#</th>

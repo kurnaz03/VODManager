@@ -961,7 +961,7 @@ function VpnTab() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{minWidth: '600px'}}>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-5 py-3">Ad</th>
@@ -1193,7 +1193,7 @@ function VpnServerConfigModal({ onClose }: { onClose: () => void }) {
           className="space-y-3"
           onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="panel-label">Sunucu IP</label>
               <input className="panel-input" defaultValue={config.server_ip} {...register('server_ip')} />

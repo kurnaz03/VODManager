@@ -307,7 +307,7 @@ export default function UsersPage() {
   function copyUsername(u: IptvUser) { navigator.clipboard.writeText(u.username); showToast('Username kopyalandi', 'ok') }
 
   return (
-    <div className="min-h-screen bg-white text-gray-800 font-sans">
+    <div className="min-h-screen bg-white text-gray-800 font-sans overflow-x-hidden">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 rounded px-4 py-2 text-sm font-semibold shadow-lg text-white ${toast.type === 'ok' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.msg}
@@ -315,11 +315,11 @@ export default function UsersPage() {
       )}
 
       {/* Top bar */}
-      <div className="bg-gray-100 border-b border-gray-300 px-4 py-3 flex flex-wrap items-center gap-2">
+      <div className="bg-gray-100 border-b border-gray-300 px-3 py-2 flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
-            className="bg-white border border-gray-300 rounded text-xs pl-7 pr-3 py-1.5 text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none w-44" />
+            className="bg-white border border-gray-300 rounded text-xs pl-7 pr-3 py-1.5 text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none w-36 sm:w-44" />
         </div>
 
         <div className="relative">
@@ -362,30 +362,30 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <div className="flex-1" />
-
-        <button onClick={() => usersQ.refetch()}
-          className="flex items-center gap-1.5 bg-white border border-gray-300 hover:border-blue-500 rounded px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 transition">
-          <Filter size={13} /> Filter
-        </button>
-        <button onClick={() => usersQ.refetch()}
-          className="flex items-center gap-1.5 bg-white border border-gray-300 hover:border-blue-500 rounded px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 transition">
-          <Search size={13} /> Search
-        </button>
-        <button onClick={() => setAutoRefresh(v => !v)}
-          className={`flex items-center gap-1.5 border rounded px-3 py-1.5 text-xs transition ${autoRefresh ? 'bg-green-600 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-green-500 hover:text-green-600'}`}>
-          <RefreshCw size={13} className={autoRefresh ? 'animate-spin' : ''} />
-          Auto-Refresh
-        </button>
-        <button onClick={handleNew}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 border border-blue-700 rounded px-3 py-1.5 text-xs text-white font-semibold transition">
-          <Plus size={13} /> Add User
-        </button>
+        <div className="flex flex-wrap gap-1.5 ml-auto">
+          <button onClick={() => usersQ.refetch()}
+            className="flex items-center gap-1.5 bg-white border border-gray-300 hover:border-blue-500 rounded px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 transition">
+            <Filter size={13} /> Filter
+          </button>
+          <button onClick={() => usersQ.refetch()}
+            className="flex items-center gap-1.5 bg-white border border-gray-300 hover:border-blue-500 rounded px-3 py-1.5 text-xs text-gray-600 hover:text-blue-600 transition">
+            <Search size={13} /> Search
+          </button>
+          <button onClick={() => setAutoRefresh(v => !v)}
+            className={`flex items-center gap-1.5 border rounded px-3 py-1.5 text-xs transition ${autoRefresh ? 'bg-green-600 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-green-500 hover:text-green-600'}`}>
+            <RefreshCw size={13} className={autoRefresh ? 'animate-spin' : ''} />
+            Auto-Refresh
+          </button>
+          <button onClick={handleNew}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 border border-blue-700 rounded px-3 py-1.5 text-xs text-white font-semibold transition">
+            <Plus size={13} /> Add User
+          </button>
+        </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-xs border-collapse" style={{minWidth: '900px'}}>
           <thead>
             <tr className="bg-gray-100 border-b border-gray-300 text-gray-500 uppercase text-[11px] tracking-wide">
               <th className="px-3 py-2.5 text-left font-semibold w-12">#</th>
