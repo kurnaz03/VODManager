@@ -246,7 +246,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 4 Gradient Metric Cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         {/* CPU */}
         <MetricCard
           gradient="bg-gradient-to-br from-orange-400 to-rose-500"
@@ -388,15 +388,15 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-slate-400">Bugun yayin yok</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1" style={{ maxHeight: '420px' }}>
+            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 pr-1" style={{ maxHeight: '420px' }}>
               {todaySeries.map((s) => (
                 <div
                   key={s.id}
-                  className="flex gap-4 rounded-2xl border border-slate-100 bg-white p-3 hover:bg-blue-50/50 hover:border-blue-100 transition-colors group"
+                  className="flex flex-col rounded-2xl border border-slate-100 bg-white p-3 hover:bg-blue-50/50 hover:border-blue-100 transition-colors group"
                 >
                   <button
                     type="button"
-                    className="flex-shrink-0 w-[70px] h-[105px] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center"
+                    className="w-full aspect-[2/3] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center mb-2"
                     onClick={() => navigate('/series', { state: { seriesId: s.id } })}
                   >
                     {s.poster_url ? (
@@ -446,7 +446,7 @@ export default function DashboardPage() {
       {/* ── Statistics ── */}
       <div className="glass-panel p-6">
         <h3 className="mb-4 text-xl font-semibold text-slate-900">Statistics</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
           {/* Toplam Sunucu */}
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-pink-500">

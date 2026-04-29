@@ -16,6 +16,11 @@
   --vm-accent: #14B8A6;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
 html {
   background: #f0f2f5;
 }
@@ -113,6 +118,10 @@ select {
 
   .table-shell {
     @apply overflow-hidden rounded-[24px] border border-slate-200 bg-white;
+  }
+
+  .table-scroll {
+    @apply overflow-x-auto;
   }
 
   .table-head {
