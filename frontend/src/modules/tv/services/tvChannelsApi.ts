@@ -34,6 +34,11 @@ export interface TvChannel {
   updated_at: string
   servers: TvChannelServerOut[]
   bouquet_assignments: TvChannelBouquetOut[]
+  backup_urls: string[]
+  on_demand: boolean
+  on_demand_timeout: number
+  on_demand_server_id: number | null
+  on_demand_server_name: string | null
 }
 
 export interface TvChannelCreate {
@@ -46,6 +51,10 @@ export interface TvChannelCreate {
   sort_order: number
   server_ids: number[]
   bouquet_ids: number[]
+  backup_urls?: string[]
+  on_demand?: boolean
+  on_demand_timeout?: number
+  on_demand_server_id?: number | null
 }
 
 export interface TvChannelUpdate {
@@ -58,6 +67,10 @@ export interface TvChannelUpdate {
   sort_order?: number
   server_ids?: number[]
   bouquet_ids?: number[]
+  backup_urls?: string[]
+  on_demand?: boolean
+  on_demand_timeout?: number
+  on_demand_server_id?: number | null
 }
 
 export interface TvChannelTestResult {
