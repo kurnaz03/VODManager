@@ -39,6 +39,7 @@ from app.modules.content.schemas import (
     MusicTrackOut,
     MusicTrackUpdate,
     MusicUploadResponse,
+    PlaylistReorderRequest,
     RadioContentCreate,
     RadioContentResponse,
     RadioContentUpdate,
@@ -352,8 +353,8 @@ def remove_playlist_item(playlist_id: int, item_id: int, db: Session = Depends(g
 
 
 @router.put("/music/playlists/{playlist_id}/items/reorder", response_model=MusicPlaylistOut, tags=["music"])
-def reorder_playlist_items(playlist_id: int, ordered_ids: list[int], db: Session = Depends(get_db)):
-    return service.reorder_playlist_items(db, playlist_id, ordered_ids)
+def reorder_playlist_items(playlist_id: int, payload: PlaylistReorderRequest, db: Session = Depends(get_db)):
+    return service.reorder_playlist_items(db, playlist_id, payload.item_ids)
 
 
 # ── Music Playlist Broadcast ───────────────────────────────────────────────────
@@ -399,21 +400,66 @@ def music_download_youtube(payload: MusicDownloadRequest):
     return MusicDownloadResponse(task_id=task.id, status="queued")
 
 
-@router.get("/music/download-status/{task_id}", response_model=MusicDownloadStatusResponse, tags=["music"])
+@router.get("/music/download-status/{task_id}", tags=["music"])
 def music_download_status(task_id: str):
-    """Celery task durumunu sorgula."""
+    """Celery task durumunu sorgula. Frontend-uyumlu format dondurur."""
     from app.core.celery_app import celery_app
     from celery.result import AsyncResult
 
     result = AsyncResult(task_id, app=celery_app)
     state = result.state  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
-    task_result = None
-    if result.ready():
+
+    # Celery durumunu frontend'in bekledigine donustur
+    if state == "SUCCESS":
+        task_result = result.result if isinstance(result.result, dict) else {}
+        if task_result.get("status") == "failed":
+            return {
+                "task_id": task_id,
+                "status": "error",
+                "progress": 0,
+                "title": None,
+                "error": task_result.get("error", "Indirme basarisiz oldu"),
+                "track_id": None,
+            }
+        return {
+            "task_id": task_id,
+            "status": "done",
+            "progress": 100,
+            "title": task_result.get("title"),
+            "error": None,
+            "track_id": task_result.get("track_id"),
+        }
+    elif state == "FAILURE":
         try:
-            task_result = result.result if isinstance(result.result, dict) else {"value": str(result.result)}
+            err = str(result.result)
         except Exception:
-            task_result = None
-    return MusicDownloadStatusResponse(task_id=task_id, status=state, result=task_result)
+            err = "Bilinmeyen hata"
+        return {
+            "task_id": task_id,
+            "status": "error",
+            "progress": 0,
+            "title": None,
+            "error": err,
+            "track_id": None,
+        }
+    elif state in ("STARTED", "RETRY"):
+        return {
+            "task_id": task_id,
+            "status": "downloading",
+            "progress": 50,
+            "title": None,
+            "error": None,
+            "track_id": None,
+        }
+    else:  # PENDING
+        return {
+            "task_id": task_id,
+            "status": "pending",
+            "progress": 0,
+            "title": None,
+            "error": None,
+            "track_id": None,
+        }
 
 
 # ── Music File Upload ──────────────────────────────────────────────────────────

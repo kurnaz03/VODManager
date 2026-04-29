@@ -434,6 +434,10 @@ class MusicPlaylistOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PlaylistReorderRequest(BaseModel):
+    item_ids: list[int]
+
+
 # ── Music Download Schemas ────────────────────────────────────────────────────
 
 class MusicDownloadRequest(BaseModel):

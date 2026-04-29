@@ -19,6 +19,7 @@ from app.modules.settings.models import YoutubeCookieCredential  # noqa: F401
 from app.modules.content.models import (  # noqa: F401
     MovieCategory, SeriesCategory, TvCategory, RadioCategory, Bouquet, BouquetCategory,
     MovieContent, SeriesContent, SeriesSeason, SeriesEpisode, TvContent, RadioContent,
+    MusicTrack, MusicPlaylist, MusicPlaylistItem,
 )
 from app.modules.transcode.models import TranscodeProfile, TranscodeJob  # noqa: F401
 from app.modules.iptv_users.models import IptvUser, UserBouquet  # noqa: F401
