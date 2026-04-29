@@ -213,6 +213,16 @@ server {
     location /uploads/ {
         alias /var/www/vod-manager/shared/uploads/;
     }
+
+    location /hls/ {
+        alias /var/www/vod-manager/shared/hls/;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+        }
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
 }
 
 server {
