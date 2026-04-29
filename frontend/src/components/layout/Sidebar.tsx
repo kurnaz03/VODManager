@@ -176,14 +176,14 @@ export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: S
                       )
                     }
                     return (
-                      <div key={item.label} className="rounded-2xl bg-white/10">
+                      <div key={item.label}>
                         <button
                           type="button"
                           onClick={() => setExpanded((current) => ({ ...current, [item.label]: !isOpen }))}
                           className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm text-white/85 transition hover:bg-white/10"
                         >
                           <span className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white shadow-sm">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-2xl text-white">
                               <Icon size={18} />
                             </span>
                             <span>{item.label}</span>
