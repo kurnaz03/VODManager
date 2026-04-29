@@ -83,25 +83,25 @@ export default function CategoriesPage({ categoryType }: Props) {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900">{meta.title}</h2>
+            <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">{meta.title}</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{meta.description}</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative min-w-[240px]">
+            <div className="relative w-full sm:min-w-[240px]">
               <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Kategori ara..."
-                className="panel-input pl-11"
+                className="panel-input w-full pl-11"
               />
             </div>
-            <button type="button" onClick={() => setSelectedId(-1)} className="primary-button">
+            <button type="button" onClick={() => setSelectedId(-1)} className="primary-button w-full sm:w-auto">
               <Plus size={18} />
               Yeni Kategori
             </button>

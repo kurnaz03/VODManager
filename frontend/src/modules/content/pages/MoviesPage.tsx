@@ -48,18 +48,18 @@ export default function MoviesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
+        <div className="flex flex-wrap gap-4 items-start justify-between">
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900">Movies</h2>
+            <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">Movies</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               Indirilen film iceriklerini kategori bazinda listeleyin ve yonetin.
             </p>
           </div>
           <button
             type="button"
-            className="primary-button"
+            className="primary-button shrink-0"
             onClick={() => navigate('/downloads')}
           >
             <Plus size={18} />
@@ -69,12 +69,12 @@ export default function MoviesPage() {
       </section>
 
       <section className="glass-panel p-4 sm:p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-medium text-slate-700">
             {movies.length} film listelendi
           </div>
           <select
-            className="panel-select max-w-[220px]"
+            className="panel-select w-full sm:w-auto sm:max-w-[220px]"
             value={selectedCategoryId ?? ''}
             onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
           >
@@ -88,7 +88,7 @@ export default function MoviesPage() {
         </div>
 
         <div className="table-shell overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[600px] text-sm">
             <thead>
               <tr className="table-head text-left">
                 <th className="px-4 py-3 font-semibold text-slate-500">ID</th>
@@ -128,7 +128,7 @@ export default function MoviesPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => setEditItem(m)}
@@ -164,7 +164,7 @@ export default function MoviesPage() {
       {/* Edit Modal */}
       {editItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-4 sm:p-6 shadow-xl overflow-y-auto max-h-[90vh]">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900">Film Duzenle</h3>
               <button type="button" onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600">
@@ -184,10 +184,10 @@ export default function MoviesPage() {
       {/* Delete Confirm Dialog */}
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-4 sm:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900">Silme Onay</h3>
             <p className="mt-2 text-sm text-slate-600">Bu filmi silmek istediginize emin misiniz? Bu islem geri alinamaz.</p>
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button type="button" className="secondary-button" onClick={() => setDeleteId(null)}>
                 <X size={16} /> Iptal
               </button>
@@ -238,16 +238,16 @@ function EditMovieForm({
     >
       <div>
         <label className="panel-label">Film Basligi</label>
-        <input className="panel-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input className="panel-input w-full" value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div>
         <label className="panel-label">Aciklama</label>
-        <textarea className="panel-textarea" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <textarea className="panel-textarea w-full" value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <div>
         <label className="panel-label">Kategori</label>
         <select
-          className="panel-select"
+          className="panel-select w-full"
           value={categoryId ?? ''}
           onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
         >
@@ -259,9 +259,9 @@ function EditMovieForm({
       </div>
       <div>
         <label className="panel-label">Poster URL</label>
-        <input className="panel-input" value={posterUrl} onChange={(e) => setPosterUrl(e.target.value)} />
+        <input className="panel-input w-full" value={posterUrl} onChange={(e) => setPosterUrl(e.target.value)} />
       </div>
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-wrap justify-end gap-3">
         <button type="submit" className="primary-button" disabled={isPending}>
           <Check size={16} /> {isPending ? 'Kaydediliyor...' : 'Kaydet'}
         </button>

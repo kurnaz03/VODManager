@@ -41,16 +41,16 @@ export default function BouquetsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
+        <div className="flex flex-wrap gap-4 items-start justify-between">
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900">Bouquets</h2>
+            <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">Bouquets</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               Kullanicilara atanacak icerik paketlerini olusturun ve medya ekleyin.
             </p>
           </div>
-          <button type="button" onClick={() => setOpen(true)} className="primary-button">
+          <button type="button" onClick={() => setOpen(true)} className="primary-button shrink-0">
             <Plus size={18} />
             Yeni Bouquet
           </button>
@@ -58,8 +58,8 @@ export default function BouquetsPage() {
       </section>
 
       <section className="glass-panel p-4 sm:p-6">
-        <div className="table-shell">
-          <div className="table-head hidden grid-cols-[0.4fr,1.3fr,1.5fr,0.7fr,0.7fr,0.8fr,0.8fr,1fr] gap-4 px-5 py-4 lg:grid">
+        <div className="table-shell overflow-x-auto">
+          <div className="table-head hidden min-w-[700px] grid-cols-[0.4fr,1.3fr,1.5fr,0.7fr,0.7fr,0.8fr,0.8fr,1fr] gap-4 px-5 py-4 lg:grid">
             <div>ID</div>
             <div>Bouquet Adi</div>
             <div>Aciklama</div>
@@ -69,7 +69,7 @@ export default function BouquetsPage() {
             <div>Durum</div>
             <div>Islemler</div>
           </div>
-          <div className="divide-y divide-slate-200">
+          <div className="min-w-[700px] divide-y divide-slate-200">
             {bouquets.map((bouquet, index) => (
               <div
                 key={bouquet.id}
@@ -123,7 +123,7 @@ export default function BouquetsPage() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-sm">
-          <div className="glass-panel w-full max-w-2xl p-6 sm:p-8">
+          <div className="glass-panel w-full max-w-2xl p-4 sm:p-8 overflow-y-auto max-h-[90vh]">
             <div className="mb-5">
               <h3 className="text-2xl font-semibold text-slate-900">Yeni bouquet olustur</h3>
               <p className="mt-1 text-sm text-slate-500">Olusturduktan sonra detay sayfasina yonlendirilirsiniz.</p>

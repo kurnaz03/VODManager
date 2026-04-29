@@ -214,7 +214,7 @@ export default function BouquetDetailPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link
           to="/bouquets"
           className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition"
@@ -222,8 +222,8 @@ export default function BouquetDetailPage() {
           <ArrowLeft size={16} />
           Bouquets
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{bouquetQ.data.name}</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 truncate">{bouquetQ.data.name}</h1>
           <p className="text-xs text-slate-400 mt-0.5">{bouquetItems.length} medya ögesi</p>
         </div>
       </div>
@@ -337,12 +337,12 @@ export default function BouquetDetailPage() {
         {/* RIGHT: Content browser */}
         <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
           {/* Tabs */}
-          <div className="flex border-b border-slate-200 bg-slate-50">
+          <div className="flex overflow-x-auto border-b border-slate-200 bg-slate-50">
             {TABS.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold transition border-b-2 -mb-px
+                className={`flex shrink-0 items-center gap-1.5 px-4 py-3 text-xs font-semibold transition border-b-2 -mb-px
                   ${activeTab === tab.key
                     ? 'border-blue-500 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}

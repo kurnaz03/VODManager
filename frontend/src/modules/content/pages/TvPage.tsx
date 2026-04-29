@@ -31,10 +31,10 @@ export default function TvPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">TV</h2>
+          <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">TV</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             Canli yayin kanallarini kategori bazinda listeleyin.
           </p>
@@ -63,7 +63,7 @@ export default function TvPage() {
         </div>
 
         <div className="table-shell overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[500px] text-sm">
             <thead>
               <tr className="table-head text-left">
                 <th className="px-4 py-3 font-semibold text-slate-500">ID</th>
@@ -107,10 +107,10 @@ export default function TvPage() {
 
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-4 sm:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900">Silme Onay</h3>
             <p className="mt-2 text-sm text-slate-600">Bu kaydı silmek istediginize emin misiniz?</p>
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button type="button" className="secondary-button" onClick={() => setDeleteId(null)}>
                 <X size={16} /> Iptal
               </button>

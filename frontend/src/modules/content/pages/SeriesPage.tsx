@@ -253,12 +253,12 @@ export default function SeriesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
-        <div className="flex items-center justify-between">
-          <div>
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
+        <div className="flex flex-wrap gap-4 items-start justify-between">
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900">Series</h2>
-            <nav className="mt-3 flex items-center gap-1 text-sm text-slate-500">
+            <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">Series</h2>
+            <nav className="mt-3 flex flex-wrap items-center gap-1 text-sm text-slate-500">
               {breadcrumbs.map((b, i) => (
                 <span key={i} className="flex items-center gap-1">
                   {i > 0 && <ChevronRight size={14} />}
@@ -273,7 +273,7 @@ export default function SeriesPage() {
               ))}
             </nav>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 shrink-0">
             {view !== 'series' && (
               <button type="button" className="secondary-button" onClick={goBack}>
                 <ArrowLeft size={16} /> Geri
@@ -356,16 +356,16 @@ export default function SeriesPage() {
         {view === 'series' && (
           <div>
             {/* Filter row */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <input
                 type="text"
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[180px]"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 sm:w-auto sm:min-w-[180px]"
                 placeholder="Dizi ara..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <select
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 sm:w-auto"
                 value={dayFilter}
                 onChange={(e) => setDayFilter(e.target.value)}
               >
@@ -373,7 +373,7 @@ export default function SeriesPage() {
                 {BROADCAST_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
               <select
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300 sm:w-auto"
                 value={channelFilter}
                 onChange={(e) => setChannelFilter(e.target.value)}
               >
@@ -383,7 +383,7 @@ export default function SeriesPage() {
               {(dayFilter || channelFilter || searchQuery) && (
                 <button
                   type="button"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 sm:w-auto"
                   onClick={() => { setDayFilter(''); setChannelFilter(''); setSearchQuery('') }}
                 >
                   Temizle
@@ -391,7 +391,7 @@ export default function SeriesPage() {
               )}
             </div>
             <div className="table-shell overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="table-head text-left">
                   <th className="px-4 py-3 font-semibold text-slate-500">ID</th>
@@ -512,7 +512,7 @@ export default function SeriesPage() {
         {/* Episodes view */}
         {view === 'episodes' && (
           <div className="table-shell overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="table-head text-left">
                   <th className="px-4 py-3 font-semibold text-slate-500">Bolum</th>
@@ -675,7 +675,7 @@ export default function SeriesPage() {
       {/* Edit Series Modal */}
       {editSeries && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl overflow-y-auto" style={{ maxHeight: '90vh' }}>
+          <div className="w-full max-w-lg rounded-3xl bg-white p-4 sm:p-6 shadow-xl overflow-y-auto" style={{ maxHeight: '90vh' }}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900">Dizi Duzenle</h3>
               <button type="button" onClick={() => setEditSeries(null)}><X size={20} /></button>
@@ -708,17 +708,17 @@ export default function SeriesPage() {
                 <label className="panel-label">Aciklama</label>
                 <textarea className="panel-input" rows={3} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Yayin Gunu</label>
-                  <select className="panel-input" value={editBroadcastDay} onChange={(e) => setEditBroadcastDay(e.target.value)}>
+                  <select className="panel-input w-full" value={editBroadcastDay} onChange={(e) => setEditBroadcastDay(e.target.value)}>
                     <option value="">Secilmedi</option>
                     {BROADCAST_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="panel-label">Kanal</label>
-                  <input className="panel-input" value={editBroadcastChannel} onChange={(e) => setEditBroadcastChannel(e.target.value)} placeholder="TRT1, ATV..." />
+                  <input className="panel-input w-full" value={editBroadcastChannel} onChange={(e) => setEditBroadcastChannel(e.target.value)} placeholder="TRT1, ATV..." />
                 </div>
               </div>
               <div>
@@ -733,17 +733,17 @@ export default function SeriesPage() {
                 <label className="panel-label">Backdrop URL</label>
                 <input className="panel-input" value={editBackdropUrl} onChange={(e) => setEditBackdropUrl(e.target.value)} placeholder="https://..." />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Cikis Yili</label>
-                  <input type="number" className="panel-input" value={editReleaseYear} onChange={(e) => setEditReleaseYear(e.target.value)} placeholder="2024" />
+                  <input type="number" className="panel-input w-full" value={editReleaseYear} onChange={(e) => setEditReleaseYear(e.target.value)} placeholder="2024" />
                 </div>
                 <div>
                   <label className="panel-label">Puan</label>
-                  <input type="number" step="0.1" min="0" max="10" className="panel-input" value={editRating} onChange={(e) => setEditRating(e.target.value)} placeholder="7.5" />
+                  <input type="number" step="0.1" min="0" max="10" className="panel-input w-full" value={editRating} onChange={(e) => setEditRating(e.target.value)} placeholder="7.5" />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <button type="button" className="secondary-button" onClick={() => setEditSeries(null)}>
                   <X size={16} /> Iptal
                 </button>
@@ -759,10 +759,10 @@ export default function SeriesPage() {
       {/* Delete Confirm */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-4 sm:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900">Silme Onay</h3>
             <p className="mt-2 text-sm text-slate-600">Bu kaydı silmek istediginize emin misiniz?</p>
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button type="button" className="secondary-button" onClick={() => setDeleteTarget(null)}>
                 <X size={16} /> Iptal
               </button>
@@ -871,10 +871,10 @@ function AddSeriesForm({
           <button type="button" onClick={() => { setSelectedTmdb(null); setTitle('') }} className="text-slate-400 hover:text-slate-600 flex-shrink-0"><X size={16} /></button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="panel-label">Yayin Gunu</label>
-          <select className="panel-input" value={broadcastDay} onChange={(e) => setBroadcastDay(e.target.value)}>
+          <select className="panel-input w-full" value={broadcastDay} onChange={(e) => setBroadcastDay(e.target.value)}>
             <option value="">Secilmedi</option>
             {BROADCAST_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -963,7 +963,7 @@ function EpisodeForm({
           })
         }}
       >
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="panel-label">Bolum No</label>
             <input type="number" className="panel-input" value={epNum} min={1} onChange={(e) => setEpNum(Number(e.target.value))} required />

@@ -14,22 +14,22 @@ export default function AllCategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 sm:p-7">
+      <section className="glass-panel p-4 sm:p-6 sm:p-7">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Icerik Yonetimi</div>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">Kategoriler</h2>
+          <h2 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">Kategoriler</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             Tum icerik kategorilerini tek sayfada yonetin.
           </p>
         </div>
 
-        <div className="mt-5 flex gap-1 border-b border-slate-200">
+        <div className="mt-5 flex overflow-x-auto gap-1 border-b border-slate-200">
           {TABS.map((tab) => (
             <button
               key={tab.type}
               type="button"
               onClick={() => setActiveTab(tab.type)}
-              className={`px-5 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
+              className={`shrink-0 px-5 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
                 activeTab === tab.type
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
