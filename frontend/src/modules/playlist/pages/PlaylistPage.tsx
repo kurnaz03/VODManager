@@ -77,11 +77,11 @@ function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 sm:p-6 shadow-2xl">
         <h3 className="mb-2 text-base font-semibold text-slate-800">{title}</h3>
         <p className="mb-6 text-sm text-slate-500">{message}</p>
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-wrap justify-end gap-3">
           <button
             onClick={onCancel}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition"
@@ -130,8 +130,8 @@ function CreatePlaylistModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl my-2 sm:my-0">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-800">Yeni Playlist Olustur</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 transition">
@@ -219,8 +219,8 @@ function EpgModal({
   }, [programs])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[82vh] rounded-2xl bg-white shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[82vh] rounded-2xl bg-white shadow-2xl flex flex-col my-2 sm:my-0">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <h3 className="text-base font-semibold text-slate-800">EPG — {playlistName}</h3>
@@ -340,8 +340,8 @@ function AddVideosModal({
   const jobs = jobsQ.data ?? []
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg max-h-[72vh] rounded-2xl bg-white shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-2 sm:p-4">
+      <div className="w-full max-w-lg max-h-[80vh] sm:max-h-[72vh] rounded-2xl bg-white shadow-2xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <h3 className="text-sm font-semibold text-slate-800">Playlist'e Video Ekle</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 transition">
@@ -535,24 +535,24 @@ function PlaylistListView({
       {playerUrl && <PlayerModal url={playerUrl} onClose={() => setPlayerUrl(null)} />}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">VOD Channel / Playlist</h1>
           <p className="mt-1 text-sm text-slate-500">Transcode edilmis videolardan kanal playlist'leri olusturun</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href="/api/v1/playlists/epg.xml"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
           >
             <Download size={15} />
-            Toplu EPG Indir
+            <span className="hidden sm:inline">Toplu EPG Indir</span>
           </a>
           <button
             onClick={onCreate}
-            className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
+            className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
           >
             <Plus size={16} />
             Yeni Playlist
@@ -578,7 +578,7 @@ function PlaylistListView({
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[800px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left">
                   <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">ID</th>
@@ -1004,10 +1004,10 @@ function PlaylistDetailView({
       </div>
 
       {/* Main 2-column WMP layout */}
-      <div className="flex gap-4" style={{ minHeight: '520px' }}>
+      <div className="flex flex-col lg:flex-row gap-4" style={{ minHeight: '520px' }}>
 
         {/* LEFT: Light Playlist Panel */}
-        <div className="w-[400px] shrink-0 rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden shadow-sm">
+        <div className="w-full lg:w-[400px] lg:shrink-0 rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden shadow-sm" style={{ minHeight: '360px' }}>
           {/* Panel header */}
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
             <div className="flex items-center gap-2">
@@ -1257,13 +1257,13 @@ function PlaylistDetailView({
           </div>
 
           {/* Controls Panel */}
-          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
-            <div className="flex flex-wrap items-end gap-3">
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-wrap items-end gap-2 sm:gap-3">
               {/* Server Select */}
-              <div>
+              <div className="w-full sm:w-auto">
                 <label className="mb-1 block text-xs font-medium text-slate-500">Sunucu</label>
                 <select
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                  className="w-full sm:w-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
                   value={currentPlaylist.server_id ?? ''}
                   disabled={isPlaying}
                   onChange={(e) => {
@@ -1283,7 +1283,7 @@ function PlaylistDetailView({
                 <button
                   onClick={() => startMut.mutate()}
                   disabled={startMut.isPending || currentPlaylist.item_count === 0}
-                  className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                  className="flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 sm:px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed transition"
                   title={currentPlaylist.item_count === 0 ? 'Once video ekleyin' : undefined}
                 >
                   <Play size={15} fill="currentColor" />
@@ -1293,7 +1293,7 @@ function PlaylistDetailView({
                 <button
                   onClick={() => stopMut.mutate()}
                   disabled={stopMut.isPending}
-                  className="flex items-center gap-2 rounded-2xl bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-600 disabled:opacity-60 transition"
+                  className="flex items-center gap-2 rounded-2xl bg-rose-500 px-4 sm:px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-600 disabled:opacity-60 transition"
                 >
                   <Square size={15} fill="currentColor" />
                   {stopMut.isPending ? 'Durduruluyor...' : 'Yayini Durdur'}
@@ -1303,7 +1303,7 @@ function PlaylistDetailView({
               {/* EPG */}
               <button
                 onClick={() => setShowEpg(true)}
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
+                className="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 sm:px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
               >
                 <Calendar size={14} />
                 EPG Goruntule
@@ -1313,7 +1313,7 @@ function PlaylistDetailView({
                 href={`/api/v1/playlists/${playlist.id}/epg.xml`}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
+                className="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 sm:px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
               >
                 <Download size={14} />
                 EPG Indir
@@ -1323,7 +1323,7 @@ function PlaylistDetailView({
               {streamUrl && (
                 <button
                   onClick={copyStreamUrl}
-                  className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
+                  className="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 sm:px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition"
                 >
                   <Copy size={14} />
                   {copied ? 'Kopyalandi!' : 'Stream URL'}

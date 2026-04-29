@@ -105,8 +105,8 @@ function ChannelModal({ initial, categories, servers, bouquets, onClose, onSave,
   const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-gray-600 mb-1'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-2xl my-2 sm:my-0">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 sticky top-0 bg-white z-10">
           <div className="flex items-center gap-2 text-gray-800 font-semibold text-base">
             <MonitorPlay size={18} className="text-blue-500" />
@@ -351,8 +351,8 @@ function ViewersModal({ channelName, channelId, onClose }: ViewersModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[80vh] flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl my-2 sm:my-0">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2 text-gray-800 font-semibold text-base">
             <Users size={18} className="text-blue-500" />
@@ -373,7 +373,8 @@ function ViewersModal({ channelName, channelId, onClose }: ViewersModalProps) {
               Şu an izleyici yok.
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   {['Username', 'IP Adresi', 'Bağlanma Zamanı', 'Süre'].map((h) => (
@@ -394,6 +395,7 @@ function ViewersModal({ channelName, channelId, onClose }: ViewersModalProps) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
         <div className="border-t border-gray-100 px-6 py-3 flex justify-between items-center flex-shrink-0">
@@ -539,10 +541,10 @@ export default function TvChannelsPage() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* ── Header ── */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Streams</h1>
-          <div className="flex items-center gap-2 flex-wrap">
+      <div className="border-b border-gray-200 bg-white px-3 sm:px-6 py-3 sm:py-4 shadow-sm">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Streams</h1>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {/* Filter toggle */}
             <button
               type="button"
@@ -569,35 +571,35 @@ export default function TvChannelsPage() {
             <button
               type="button"
               onClick={() => setAutoRefresh((v) => !v)}
-              className={`flex items-center gap-1.5 rounded border px-3 py-2 text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded border px-2 sm:px-3 py-2 text-xs font-semibold transition ${
                 autoRefresh
                   ? 'bg-gray-700 border-gray-700 text-white'
                   : 'bg-gray-800 border-gray-800 text-white hover:bg-gray-700'
               }`}
             >
               <RefreshCw size={13} className={autoRefresh ? 'animate-spin' : ''} />
-              Auto-Refresh {autoRefresh ? 'ON' : 'OFF'}
+              <span className="hidden sm:inline">Auto-Refresh {autoRefresh ? 'ON' : 'OFF'}</span>
             </button>
             {/* Add Stream */}
             <button
               type="button"
               onClick={() => { setEditChannel(null); setModalOpen(true) }}
-              className="flex items-center gap-1.5 rounded border bg-gray-800 border-gray-800 hover:bg-gray-700 px-3 py-2 text-xs font-semibold text-white transition"
+              className="flex items-center gap-1.5 rounded border bg-gray-800 border-gray-800 hover:bg-gray-700 px-2 sm:px-3 py-2 text-xs font-semibold text-white transition"
             >
               <Plus size={13} />
-              Add Stream
+              <span className="hidden sm:inline">Add Stream</span>
             </button>
           </div>
         </div>
 
         {/* ── Filter Row ── */}
         {showFilters && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
+          <div className="mt-3 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 pt-3 border-t border-gray-100">
             {/* Text search */}
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                className="rounded border border-gray-300 bg-white pl-8 pr-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition w-48"
+                className="rounded border border-gray-300 bg-white pl-8 pr-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition w-full sm:w-48"
                 placeholder="Search streams..."
                 value={searchText}
                 onChange={(e) => { setSearchText(e.target.value); resetPage() }}
@@ -605,7 +607,7 @@ export default function TvChannelsPage() {
             </div>
             {/* All Servers */}
             <select
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition"
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition w-full sm:w-auto"
               value={filterServerId ?? ''}
               onChange={(e) => { setFilterServerId(e.target.value ? Number(e.target.value) : null); resetPage() }}
             >
@@ -616,7 +618,7 @@ export default function TvChannelsPage() {
             </select>
             {/* Category */}
             <select
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition"
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition w-full sm:w-auto"
               value={filterCatId ?? ''}
               onChange={(e) => { setFilterCatId(e.target.value ? Number(e.target.value) : null); resetPage() }}
             >
@@ -627,7 +629,7 @@ export default function TvChannelsPage() {
             </select>
             {/* Status */}
             <select
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition"
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition w-full sm:w-auto"
               value={filterStatus}
               onChange={(e) => { setFilterStatus(e.target.value as 'all' | 'active' | 'inactive'); resetPage() }}
             >
@@ -666,10 +668,10 @@ export default function TvChannelsPage() {
       )}
 
       {/* ── Table ── */}
-      <div className="px-6 py-4">
+      <div className="px-2 sm:px-6 py-4">
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[800px] text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   {[
@@ -878,32 +880,32 @@ export default function TvChannelsPage() {
 
           {/* ── Pagination ── */}
           {filtered.length > 0 && (
-            <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-3 sm:px-4 py-3">
               <div className="text-xs text-gray-500">
                 Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} streams
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap justify-center">
                 <button
                   type="button"
                   disabled={safePage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition"
+                  className="rounded border border-gray-300 bg-white px-2 sm:px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition"
                 >
                   Prev
                 </button>
-                {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pg = i + 1
-                  if (totalPages > 7) {
-                    if (safePage <= 4) pg = i + 1
-                    else if (safePage >= totalPages - 3) pg = totalPages - 6 + i
-                    else pg = safePage - 3 + i
+                  if (totalPages > 5) {
+                    if (safePage <= 3) pg = i + 1
+                    else if (safePage >= totalPages - 2) pg = totalPages - 4 + i
+                    else pg = safePage - 2 + i
                   }
                   return (
                     <button
                       key={pg}
                       type="button"
                       onClick={() => setPage(pg)}
-                      className={`rounded border px-2.5 py-1.5 text-xs transition ${
+                      className={`rounded border px-2 sm:px-2.5 py-1.5 text-xs transition ${
                         pg === safePage
                           ? 'bg-blue-600 border-blue-600 text-white font-semibold'
                           : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-100'
@@ -917,7 +919,7 @@ export default function TvChannelsPage() {
                   type="button"
                   disabled={safePage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition"
+                  className="rounded border border-gray-300 bg-white px-2 sm:px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition"
                 >
                   Next
                 </button>

@@ -552,12 +552,12 @@ export default function DownloadsPage() {
 
         {/* Indirme kuyrugu listesi */}
         <div className="glass-panel p-5">
-          <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Indirme kuyrugu</h3>
               <p className="mt-1 text-sm text-slate-500">Progress her 3 saniyede bir yenilenir.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 className="danger-button px-3 py-2 text-sm"
@@ -567,7 +567,7 @@ export default function DownloadsPage() {
                 Kuyrugu Temizle
               </button>
               <select
-                className="panel-select max-w-[180px]"
+                className="panel-select w-full sm:max-w-[180px]"
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
               >
@@ -700,12 +700,12 @@ export default function DownloadsPage() {
       {/* Kuyrugu temizle onay diyalogu */}
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 sm:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900">Kuyrugu Temizle</h3>
             <p className="mt-2 text-sm text-slate-600">
               Tamamlanmis, basarisiz ve iptal edilen tum indirmeler listeden kaldirilacak. Dosyalar silinmez. Emin misiniz?
             </p>
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button type="button" className="secondary-button" onClick={() => setShowClearConfirm(false)}>
                 <XCircle size={16} /> Iptal
               </button>
