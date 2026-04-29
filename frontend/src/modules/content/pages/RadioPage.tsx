@@ -129,7 +129,7 @@ function VisualUploadButton({
 
 // ─── Visual Preview ────────────────────────────────────────────────────────────
 
-function VisualPreview({ url, type }: { url: string | null; type: 'video' | 'image' | 'none' }) {
+function VisualPreview({ url, type }: { url: string | null | undefined; type: 'video' | 'image' | 'none' }) {
   if (!url || type === 'none') return null
   if (type === 'image') return <img src={url} alt="" className="mt-2 h-20 w-32 rounded-xl object-cover border border-slate-200" />
   if (type === 'video') return <video src={url} className="mt-2 h-20 w-32 rounded-xl object-cover border border-slate-200" muted />
