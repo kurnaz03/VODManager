@@ -313,6 +313,7 @@ class RadioContentCreate(BaseModel):
     is_public: bool = True
     visual_url: str | None = None
     visual_type: VisualTypeLiteral = "none"
+    server_id: int | None = None
 
 
 class RadioContentUpdate(BaseModel):
@@ -324,6 +325,7 @@ class RadioContentUpdate(BaseModel):
     is_public: bool | None = None
     visual_url: str | None = None
     visual_type: VisualTypeLiteral | None = None
+    server_id: int | None = None
 
 
 class RadioContentResponse(BaseModel):
@@ -337,6 +339,11 @@ class RadioContentResponse(BaseModel):
     is_public: bool
     visual_url: str | None
     visual_type: str | None
+    is_active: bool
+    server_id: int | None
+    server_name: str | None
+    started_at: datetime | None
+    ffmpeg_pid: int | None
     created_at: datetime
     updated_at: datetime
 

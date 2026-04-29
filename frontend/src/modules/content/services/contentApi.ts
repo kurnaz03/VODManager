@@ -367,6 +367,11 @@ export interface RadioContent {
   visual_url: string | null
   visual_type: 'video' | 'image' | 'none'
   is_public: boolean
+  is_active: boolean
+  server_id: number | null
+  server_name: string | null
+  started_at: string | null
+  ffmpeg_pid: number | null
   created_at: string
   updated_at: string
 }
@@ -380,6 +385,7 @@ export interface RadioContentCreate {
   visual_url?: string | null
   visual_type?: 'video' | 'image' | 'none'
   is_public?: boolean
+  server_id?: number | null
 }
 
 export const radioApi = {
@@ -398,6 +404,18 @@ export const radioApi = {
   },
   async remove(id: number) {
     await api.delete(`/radio/${id}`)
+  },
+  async start(id: number) {
+    const r = await api.post<{ ok: boolean; pid: number; hls_url: string }>(`/radio/${id}/start`)
+    return r.data
+  },
+  async stop(id: number) {
+    const r = await api.post<{ ok: boolean }>(`/radio/${id}/stop`)
+    return r.data
+  },
+  async restart(id: number) {
+    const r = await api.post<{ ok: boolean; pid: number; hls_url: string }>(`/radio/${id}/restart`)
+    return r.data
   },
 }
 

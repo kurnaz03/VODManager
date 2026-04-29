@@ -216,10 +216,15 @@ class RadioContent(Base):
     is_public = Column(Boolean, nullable=False, default=True, index=True)
     visual_url = Column(String(1000), nullable=True)
     visual_type = Column(String(20), nullable=True, default="none")
+    is_active = Column(Boolean, nullable=False, default=False, index=True)
+    server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    ffmpeg_pid = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     category = relationship("RadioCategory")
+    server = relationship("Server")
 
 
 # ── Music Tracks ──────────────────────────────────────────────────────────────

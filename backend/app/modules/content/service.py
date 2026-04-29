@@ -804,13 +804,18 @@ def _serialize_radio(item: RadioContent) -> dict[str, Any]:
         "is_public": item.is_public,
         "visual_url": item.visual_url,
         "visual_type": item.visual_type,
+        "is_active": item.is_active,
+        "server_id": item.server_id,
+        "server_name": item.server.name if item.server else None,
+        "started_at": item.started_at,
+        "ffmpeg_pid": item.ffmpeg_pid,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
 
 
 def list_radio_contents(db: Session, category_id: int | None = None) -> list[dict[str, Any]]:
-    query = db.query(RadioContent).options(joinedload(RadioContent.category)).order_by(RadioContent.created_at.desc())
+    query = db.query(RadioContent).options(joinedload(RadioContent.category), joinedload(RadioContent.server)).order_by(RadioContent.created_at.desc())
     if category_id is not None:
         query = query.filter(RadioContent.category_id == category_id)
     return [_serialize_radio(item) for item in query.all()]
@@ -821,11 +826,11 @@ def create_radio_content(db: Session, payload: RadioContentCreate) -> dict[str, 
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _serialize_radio(db.query(RadioContent).options(joinedload(RadioContent.category)).filter(RadioContent.id == item.id).first())
+    return _serialize_radio(db.query(RadioContent).options(joinedload(RadioContent.category), joinedload(RadioContent.server)).filter(RadioContent.id == item.id).first())
 
 
 def update_radio_content(db: Session, radio_id: int, payload: RadioContentUpdate) -> dict[str, Any]:
-    item = db.query(RadioContent).options(joinedload(RadioContent.category)).filter(RadioContent.id == radio_id).first()
+    item = db.query(RadioContent).options(joinedload(RadioContent.category), joinedload(RadioContent.server)).filter(RadioContent.id == radio_id).first()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Radyo icerigi bulunamadi")
     data = payload.model_dump(exclude_unset=True)
@@ -834,7 +839,7 @@ def update_radio_content(db: Session, radio_id: int, payload: RadioContentUpdate
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _serialize_radio(db.query(RadioContent).options(joinedload(RadioContent.category)).filter(RadioContent.id == radio_id).first())
+    return _serialize_radio(db.query(RadioContent).options(joinedload(RadioContent.category), joinedload(RadioContent.server)).filter(RadioContent.id == radio_id).first())
 
 
 def delete_radio_content(db: Session, radio_id: int) -> None:

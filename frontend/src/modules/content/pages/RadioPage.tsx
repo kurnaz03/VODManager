@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Radio, Music, ListMusic, Plus, Trash2, Pencil, X, Play, Square,
   Search, Clock, Link2, Image, Film, Wifi, ChevronUp, ChevronDown, Hash,
-  Youtube, Upload, Users, Loader2, CheckCircle, AlertCircle,
+  Youtube, Upload, Users, Loader2, CheckCircle, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import {
   contentApi, Category, RadioContent, RadioContentCreate,
@@ -140,6 +140,34 @@ function VisualPreview({ url, type }: { url: string | null | undefined; type: 'v
 // TAB 1 — Radyo Kanallari
 // ══════════════════════════════════════════════════════════════════════════════
 
+function RadioActiveBadge({ isActive }: { isActive: boolean }) {
+  if (isActive)
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        </span>
+        Yayin
+      </span>
+    )
+  return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500"><Square size={9} />Durdu</span>
+}
+
+function fmtUptime(startedAt: string | null): string {
+  if (!startedAt) return '-'
+  const start = new Date(startedAt)
+  const now = new Date()
+  const secs = Math.floor((now.getTime() - start.getTime()) / 1000)
+  if (secs < 0) return '-'
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  if (h > 0) return `${h}s ${m}d ${s}s`
+  if (m > 0) return `${m}d ${s}s`
+  return `${s}s`
+}
+
 function RadioChannelsTab() {
   const queryClient = useQueryClient()
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -148,11 +176,16 @@ function RadioChannelsTab() {
   const [selectedCat, setSelectedCat] = useState<number | null>(null)
   const [form, setForm] = useState<RadioContentCreate>({
     title: '', description: null, stream_url: null, category_id: null,
-    logo_url: null, visual_url: null, visual_type: 'none', is_public: true,
+    logo_url: null, visual_url: null, visual_type: 'none', is_public: true, server_id: null,
   })
 
   const categoriesQ = useQuery({ queryKey: ['categories', 'radio'], queryFn: () => contentApi.listCategories('radio') })
-  const radioQ = useQuery({ queryKey: ['radio', selectedCat], queryFn: () => radioApi.list(selectedCat ?? undefined) })
+  const radioQ = useQuery({
+    queryKey: ['radio', selectedCat],
+    queryFn: () => radioApi.list(selectedCat ?? undefined),
+    refetchInterval: 10000,
+  })
+  const serversQ = useQuery({ queryKey: ['servers'], queryFn: () => serversApi.list() })
 
   const addMutation = useMutation({
     mutationFn: (p: RadioContentCreate) => radioApi.create(p),
@@ -166,12 +199,25 @@ function RadioChannelsTab() {
     mutationFn: (id: number) => radioApi.remove(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['radio'] }); setDeleteId(null) },
   })
+  const startMutation = useMutation({
+    mutationFn: (id: number) => radioApi.start(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['radio'] }),
+  })
+  const stopMutation = useMutation({
+    mutationFn: (id: number) => radioApi.stop(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['radio'] }),
+  })
+  const restartMutation = useMutation({
+    mutationFn: (id: number) => radioApi.restart(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['radio'] }),
+  })
 
   const categories: Category[] = categoriesQ.data ?? []
   const radioList: RadioContent[] = radioQ.data ?? []
+  const servers: Server[] = serversQ.data ?? []
 
   function resetForm() {
-    setForm({ title: '', description: null, stream_url: null, category_id: null, logo_url: null, visual_url: null, visual_type: 'none', is_public: true })
+    setForm({ title: '', description: null, stream_url: null, category_id: null, logo_url: null, visual_url: null, visual_type: 'none', is_public: true, server_id: null })
   }
 
   function openEdit(item: RadioContent) {
@@ -179,7 +225,7 @@ function RadioChannelsTab() {
     setForm({
       title: item.title, description: item.description, stream_url: item.stream_url,
       category_id: item.category_id, logo_url: item.logo_url, visual_url: item.visual_url,
-      visual_type: item.visual_type ?? 'none', is_public: item.is_public,
+      visual_type: item.visual_type ?? 'none', is_public: item.is_public, server_id: item.server_id,
     })
   }
 
@@ -200,7 +246,7 @@ function RadioChannelsTab() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="panel-label">Stream URL</label>
-              <input className="panel-input" value={form.stream_url ?? ''} onChange={e => setForm(f => ({ ...f, stream_url: e.target.value || null }))} placeholder="rtmp://..." />
+              <input className="panel-input" value={form.stream_url ?? ''} onChange={e => setForm(f => ({ ...f, stream_url: e.target.value || null }))} placeholder="https://..." />
             </div>
             <div>
               <label className="panel-label">Kategori</label>
@@ -215,6 +261,15 @@ function RadioChannelsTab() {
               <label className="panel-label">Logo URL</label>
               <input className="panel-input" value={form.logo_url ?? ''} onChange={e => setForm(f => ({ ...f, logo_url: e.target.value || null }))} placeholder="https://..." />
             </div>
+            <div>
+              <label className="panel-label">Sunucu (opsiyonel)</label>
+              <select className="panel-select" value={form.server_id ?? ''} onChange={e => setForm(f => ({ ...f, server_id: e.target.value ? Number(e.target.value) : null }))}>
+                <option value="">Varsayilan</option>
+                {servers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="panel-label">Gorsel Tip</label>
               <select className="panel-select" value={form.visual_type ?? 'none'} onChange={e => setForm(f => ({ ...f, visual_type: e.target.value as 'video' | 'image' | 'none' }))}>
@@ -274,47 +329,94 @@ function RadioChannelsTab() {
       </div>
 
       <div className="table-shell overflow-x-auto">
-        <table className="w-full min-w-[700px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="table-head text-left">
-              <th className="px-4 py-3">ID</th>
-              <th className="px-4 py-3">Logo</th>
-              <th className="px-4 py-3">Baslik</th>
-              <th className="px-4 py-3">Kategori</th>
+              <th className="px-4 py-3 w-12">ID</th>
+              <th className="px-4 py-3 w-12">Logo</th>
+              <th className="px-4 py-3">Kanal</th>
               <th className="px-4 py-3">Stream URL</th>
-              <th className="px-4 py-3">Gorsel</th>
+              <th className="px-4 py-3">Sunucu</th>
+              <th className="px-4 py-3">Clients</th>
+              <th className="px-4 py-3">Uptime</th>
               <th className="px-4 py-3">Durum</th>
               <th className="px-4 py-3">Islemler</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {radioList.map(item => (
-              <tr key={item.id} className="table-zebra hover:bg-slate-50">
-                <td className="px-4 py-3 text-slate-400 font-mono text-xs">#{item.id}</td>
-                <td className="px-4 py-3">
-                  {item.logo_url
-                    ? <img src={item.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
-                    : <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100"><Radio size={14} className="text-slate-400" /></span>}
-                </td>
-                <td className="px-4 py-3 font-medium text-slate-900">{item.title}</td>
-                <td className="px-4 py-3 text-slate-500">{item.category_name ?? '-'}</td>
-                <td className="px-4 py-3 max-w-[180px] truncate text-slate-400 text-xs font-mono">{item.stream_url ?? '-'}</td>
-                <td className="px-4 py-3"><VisualTypeBadge type={item.visual_type ?? 'none'} /></td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${item.is_public ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                    {item.is_public ? 'Acik' : 'Kapali'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => openEdit(item)}><Pencil size={13} />Duzenle</button>
-                    <button type="button" className="danger-button px-3 py-2 text-xs" onClick={() => setDeleteId(item.id)}><Trash2 size={13} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {radioList.map(item => {
+              const isStarting = startMutation.isPending
+              const isStopping = stopMutation.isPending
+              const isRestarting = restartMutation.isPending
+
+              return (
+                <tr key={item.id} className={`table-zebra hover:bg-slate-50 ${item.is_active ? 'bg-emerald-50/30' : ''}`}>
+                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">#{item.id}</td>
+                  <td className="px-4 py-3">
+                    {item.logo_url
+                      ? <img src={item.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                      : <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100"><Radio size={14} className="text-slate-400" /></span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-900">{item.title}</div>
+                    {item.category_name && <div className="text-xs text-slate-400 mt-0.5">{item.category_name}</div>}
+                  </td>
+                  <td className="px-4 py-3 max-w-[160px] truncate text-slate-400 text-xs font-mono">{item.stream_url ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{item.server_name ?? '-'}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1 text-slate-500 text-xs"><Users size={11} />0</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono text-slate-500">
+                    {item.is_active ? fmtUptime(item.started_at) : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <RadioActiveBadge isActive={item.is_active} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      {!item.is_active ? (
+                        <button
+                          type="button"
+                          title="Baslat"
+                          className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 transition disabled:opacity-60"
+                          disabled={isStarting}
+                          onClick={() => startMutation.mutate(item.id)}
+                        >
+                          {isStarting ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                          Baslat
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Durdur"
+                          className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-600 transition disabled:opacity-60"
+                          disabled={isStopping}
+                          onClick={() => stopMutation.mutate(item.id)}
+                        >
+                          {isStopping ? <Loader2 size={11} className="animate-spin" /> : <Square size={11} />}
+                          Durdur
+                        </button>
+                      )}
+                      {item.is_active && (
+                        <button
+                          type="button"
+                          title="Yeniden Baslat"
+                          className="inline-flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition disabled:opacity-60"
+                          disabled={isRestarting}
+                          onClick={() => restartMutation.mutate(item.id)}
+                        >
+                          {isRestarting ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                        </button>
+                      )}
+                      <button type="button" className="secondary-button px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}><Pencil size={12} /></button>
+                      <button type="button" className="danger-button px-2.5 py-1.5 text-xs" onClick={() => setDeleteId(item.id)}><Trash2 size={12} /></button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
             {radioList.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-16 text-center text-sm text-slate-400">
+              <tr><td colSpan={9} className="px-6 py-16 text-center text-sm text-slate-400">
                 {radioQ.isLoading ? 'Yukleniyor...' : 'Radyo kanali bulunamadi.'}
               </td></tr>
             )}

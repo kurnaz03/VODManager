@@ -293,6 +293,24 @@ def delete_radio(radio_id: int, db: Session = Depends(get_db)):
     service.delete_radio_content(db, radio_id)
 
 
+@router.post("/radio/{radio_id}/start", tags=["radio"])
+def start_radio(radio_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.radio_broadcast import start_radio_channel
+    return start_radio_channel(db, radio_id)
+
+
+@router.post("/radio/{radio_id}/stop", tags=["radio"])
+def stop_radio(radio_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.radio_broadcast import stop_radio_channel
+    return stop_radio_channel(db, radio_id)
+
+
+@router.post("/radio/{radio_id}/restart", tags=["radio"])
+def restart_radio(radio_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.radio_broadcast import restart_radio_channel
+    return restart_radio_channel(db, radio_id)
+
+
 # ── Music Tracks ──────────────────────────────────────────────────────────────
 
 @router.get("/music/tracks", response_model=list[MusicTrackOut], tags=["music"])
