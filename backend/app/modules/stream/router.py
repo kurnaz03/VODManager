@@ -573,7 +573,7 @@ def get_m3u_plus(
                         lines.append(extinf)
                         lines.append(f"{base}/series/{username}/{password}/{item.item_id}.mp4")
             elif item_type == "vod_channel":
-                stream_url = f"{base}/live/{username}/{password}/{item.item_id}"
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.m3u8"
                 extinf = (
                     f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
                     f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
@@ -694,6 +694,7 @@ def get_m3u_plus(
 
 @router.get("/live/{username}/{password}/{item_id}", tags=["stream"])
 @router.get("/live/{username}/{password}/{item_id}.ts", tags=["stream"])
+@router.get("/live/{username}/{password}/{item_id}.m3u8", tags=["stream"])
 async def serve_live(username: str, password: str, item_id: int, request: Request, db: Session = Depends(get_db)):
     user = _auth_iptv_user(db, username, password)
 
@@ -703,8 +704,26 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist bulunamadi")
         _do_checks_and_record(db, user, request, item_id, "vod_channel", getattr(playlist, "name", None))
 
+        # Her zaman once yerel HLS dosyasini kontrol et (main server kendi HLS'ini olusturuyor olabilir)
+        hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
+        if os.path.isfile(hls_path):
+            with open(hls_path, "r") as f:
+                m3u8_content = f.read()
+            hls_base = f"http://{_server_host()}:{_server_port()}/hls/{playlist.id}/"
+            rewritten_lines = []
+            for line in m3u8_content.splitlines():
+                if line.strip() and not line.startswith("#"):
+                    rewritten_lines.append(hls_base + line.strip())
+                else:
+                    rewritten_lines.append(line)
+            return Response(
+                content="\n".join(rewritten_lines) + "\n",
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache"},
+            )
+
         if playlist.stream_url:
-            # LB sunucudaki remote stream — m3u8'i proxy et, segment URL'lerini rewrite et
+            # Uzak LB sunucudaki stream — m3u8'i proxy et, segment URL'lerini rewrite et
             try:
                 resp = await _http_client.get(playlist.stream_url)
                 resp.raise_for_status()
@@ -736,23 +755,6 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
                 media_type="application/vnd.apple.mpegurl",
             )
 
-        # Yerel HLS (LB yok, ana sunucu) — segment URL'leri mutlak yap
-        hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
-        if os.path.isfile(hls_path):
-            with open(hls_path, "r") as f:
-                m3u8_content = f.read()
-            hls_base = f"http://{_server_host()}:{_server_port()}/hls/{playlist.id}/"
-            rewritten_lines = []
-            for line in m3u8_content.splitlines():
-                if line.strip() and not line.startswith("#"):
-                    rewritten_lines.append(hls_base + line.strip())
-                else:
-                    rewritten_lines.append(line)
-            return Response(
-                content="\n".join(rewritten_lines) + "\n",
-                media_type="application/vnd.apple.mpegurl",
-                headers={"Cache-Control": "no-cache"},
-            )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD Channel stream bulunamadi")
 
     if not _check_item_access(db, user, "tv", item_id):
