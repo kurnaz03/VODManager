@@ -99,7 +99,7 @@ def apply_update() -> dict:
 
     # systemctl restart
     rc, out, err = _run(
-        ["systemctl", "restart", "vod-manager-api", "vod-manager-worker"],
+        ["sudo", "systemctl", "restart", "vod-manager-api", "vod-manager-worker"],
         timeout=30,
     )
     if rc != 0:

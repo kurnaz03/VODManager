@@ -183,6 +183,7 @@ chown -R www-data:www-data "$APP_DIR/app"
 chmod -R 755 "$APP_DIR/shared/uploads"
 git config --global --add safe.directory "$APP_DIR/app"
 
+echo 'www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vod-manager-api, /usr/bin/systemctl restart vod-manager-worker, /usr/bin/systemctl restart vod-manager-api vod-manager-worker, /usr/bin/systemctl reload nginx' > /etc/sudoers.d/vod-manager && chmod 440 /etc/sudoers.d/vod-manager
 systemctl daemon-reload
 systemctl enable --now vod-manager-api vod-manager-worker
 echo "Services OK"
