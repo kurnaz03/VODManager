@@ -56,6 +56,10 @@ class TvChannelCreate(BaseModel):
     sort_order: int = 0
     server_ids: List[int] = []
     bouquet_ids: List[int] = []
+    backup_urls: List[str] = []
+    on_demand: bool = False
+    on_demand_timeout: int = 30
+    on_demand_server_id: Optional[int] = None
 
 
 class TvChannelUpdate(BaseModel):
@@ -68,6 +72,10 @@ class TvChannelUpdate(BaseModel):
     sort_order: Optional[int] = None
     server_ids: Optional[List[int]] = None
     bouquet_ids: Optional[List[int]] = None
+    backup_urls: Optional[List[str]] = None
+    on_demand: Optional[bool] = None
+    on_demand_timeout: Optional[int] = None
+    on_demand_server_id: Optional[int] = None
 
 
 class TvChannelOut(BaseModel):
@@ -80,6 +88,11 @@ class TvChannelOut(BaseModel):
     category_name: Optional[str] = None
     is_active: bool
     sort_order: int
+    backup_urls: List[str] = []
+    on_demand: bool
+    on_demand_timeout: int
+    on_demand_server_id: Optional[int]
+    on_demand_server_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     servers: List[TvChannelServerOut] = []

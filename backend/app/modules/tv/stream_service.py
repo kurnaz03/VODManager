@@ -38,21 +38,43 @@ def pick_server_for_channel(db: Session, channel_id: int):
     )
 
 
+async def _fetch_m3u8(url: str) -> httpx.Response:
+    """Try to fetch an m3u8 URL, raising on non-2xx or connection errors."""
+    resp = await _http_client.get(url)
+    resp.raise_for_status()
+    return resp
+
+
 async def get_tv_m3u8_proxied(db: Session, channel_id: int, username: str, password: str) -> str:
     """
     Fetch the source m3u8 for a TvChannel and rewrite segment URLs to
     go through /hls-proxy/tv/{channel_id}/{segment}.
+    Tries backup_urls in order if the primary stream_url fails.
     Returns the rewritten m3u8 text.
     """
     channel = db.query(TvChannel).filter(TvChannel.id == channel_id).first()
     if channel is None or not channel.stream_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TV kanal stream bulunamadi")
 
-    try:
-        resp = await _http_client.get(channel.stream_url)
-        resp.raise_for_status()
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Kaynak stream alinamadi: {e}")
+    # Build ordered URL list: primary first, then backups
+    urls_to_try = [channel.stream_url] + (channel.backup_urls or [])
+
+    resp = None
+    last_error = None
+    for url in urls_to_try:
+        try:
+            resp = await _fetch_m3u8(url)
+            break  # First successful response wins
+        except Exception as e:
+            last_error = e
+            resp = None
+            continue
+
+    if resp is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Tum stream URL'leri basarisiz oldu: {last_error}",
+        )
 
     proxy_base = f"http://{_server_host()}:{_server_port()}/hls-proxy/tv/{channel_id}/"
     lines = []

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -16,10 +16,15 @@ class TvChannel(Base):
     category_id = Column(Integer, ForeignKey("tv_categories.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     sort_order = Column(Integer, nullable=False, default=0, index=True)
+    backup_urls = Column(JSON, nullable=True, default=[])
+    on_demand = Column(Boolean, nullable=False, default=False)
+    on_demand_timeout = Column(Integer, nullable=False, default=30)
+    on_demand_server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     category = relationship("TvCategory")
+    on_demand_server = relationship("Server", foreign_keys=[on_demand_server_id])
     servers = relationship(
         "TvChannelServer",
         back_populates="channel",

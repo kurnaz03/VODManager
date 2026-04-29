@@ -37,6 +37,8 @@ def _enrich_channel(channel: TvChannel) -> dict:
         })
 
     cat_name = channel.category.name if channel.category else None
+    od_server = channel.on_demand_server
+    od_server_name = od_server.name if od_server else None
 
     return {
         "id": channel.id,
@@ -48,6 +50,11 @@ def _enrich_channel(channel: TvChannel) -> dict:
         "category_name": cat_name,
         "is_active": channel.is_active,
         "sort_order": channel.sort_order,
+        "backup_urls": channel.backup_urls or [],
+        "on_demand": channel.on_demand,
+        "on_demand_timeout": channel.on_demand_timeout,
+        "on_demand_server_id": channel.on_demand_server_id,
+        "on_demand_server_name": od_server_name,
         "created_at": channel.created_at,
         "updated_at": channel.updated_at,
         "servers": servers_out,
@@ -60,6 +67,7 @@ def list_channels(db: Session, category_id: Optional[int] = None, active_only: b
         db.query(TvChannel)
         .options(
             joinedload(TvChannel.category),
+            joinedload(TvChannel.on_demand_server),
             joinedload(TvChannel.servers).joinedload(TvChannelServer.server),
             joinedload(TvChannel.bouquet_assignments).joinedload(TvChannelBouquet.bouquet),
         )
@@ -77,6 +85,7 @@ def get_channel(db: Session, channel_id: int) -> dict:
         db.query(TvChannel)
         .options(
             joinedload(TvChannel.category),
+            joinedload(TvChannel.on_demand_server),
             joinedload(TvChannel.servers).joinedload(TvChannelServer.server),
             joinedload(TvChannel.bouquet_assignments).joinedload(TvChannelBouquet.bouquet),
         )
@@ -121,6 +130,10 @@ def create_channel(db: Session, payload: TvChannelCreate) -> dict:
         category_id=payload.category_id,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
+        backup_urls=payload.backup_urls,
+        on_demand=payload.on_demand,
+        on_demand_timeout=payload.on_demand_timeout,
+        on_demand_server_id=payload.on_demand_server_id,
     )
     db.add(channel)
     db.flush()  # get channel.id
@@ -154,6 +167,14 @@ def update_channel(db: Session, channel_id: int, payload: TvChannelUpdate) -> di
         channel.is_active = payload.is_active
     if payload.sort_order is not None:
         channel.sort_order = payload.sort_order
+    if payload.backup_urls is not None:
+        channel.backup_urls = payload.backup_urls
+    if payload.on_demand is not None:
+        channel.on_demand = payload.on_demand
+    if payload.on_demand_timeout is not None:
+        channel.on_demand_timeout = payload.on_demand_timeout
+    if payload.on_demand_server_id is not None:
+        channel.on_demand_server_id = payload.on_demand_server_id
 
     if payload.server_ids is not None:
         # Force load existing servers before sync
