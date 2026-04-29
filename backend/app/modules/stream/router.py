@@ -20,6 +20,7 @@ from app.modules.tv import stream_service as tv_stream
 from app.modules.tv.viewer_tracker import viewer_tracker
 
 from app.core.config import settings
+from app.modules.content.models import MusicPlaylist
 
 router = APIRouter()
 
@@ -914,4 +915,50 @@ async def hls_proxy_segment(playlist_id: int, segment: str, db: Session = Depend
         content=content,
         media_type=media_type,
         headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/radio/{username}/{password}/{playlist_id}.m3u8", tags=["stream"])
+async def serve_radio_music_playlist(
+    username: str,
+    password: str,
+    playlist_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Serve a MusicPlaylist HLS stream (radio endpoint).
+
+    Authenticates the IPTV user, locates the MusicPlaylist's HLS m3u8 on disk
+    (or uses the stored stream_url), rewrites segment URLs to absolute paths
+    served via nginx /hls/.
+    """
+    _auth_iptv_user(db, username, password)
+
+    pl = db.query(MusicPlaylist).filter(MusicPlaylist.id == playlist_id).first()
+    if pl is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik playlist bulunamadi")
+
+    hls_path = f"{HLS_BASE_DIR}/music_{playlist_id}/stream.m3u8"
+    if os.path.isfile(hls_path):
+        with open(hls_path, "r") as f:
+            m3u8_content = f.read()
+        hls_base = f"http://{_server_host()}:{_server_port()}/hls/music_{playlist_id}/"
+        rewritten_lines = []
+        for line in m3u8_content.splitlines():
+            if line.strip() and not line.startswith("#"):
+                rewritten_lines.append(hls_base + line.strip())
+            else:
+                rewritten_lines.append(line)
+        return Response(
+            content="\n".join(rewritten_lines) + "\n",
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    if pl.stream_url:
+        return RedirectResponse(url=pl.stream_url, status_code=302)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Muzik playlist stream bulunamadi — once playlist'i baslatin",
     )

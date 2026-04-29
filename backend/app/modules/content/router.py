@@ -349,3 +349,23 @@ def remove_playlist_item(playlist_id: int, item_id: int, db: Session = Depends(g
 @router.put("/music/playlists/{playlist_id}/items/reorder", response_model=MusicPlaylistOut, tags=["music"])
 def reorder_playlist_items(playlist_id: int, ordered_ids: list[int], db: Session = Depends(get_db)):
     return service.reorder_playlist_items(db, playlist_id, ordered_ids)
+
+
+# ── Music Playlist Broadcast ───────────────────────────────────────────────────
+
+@router.post("/music/playlists/{playlist_id}/start", tags=["music"])
+def start_music_broadcast(playlist_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.music_broadcast import start_music_playlist
+    return start_music_playlist(db, playlist_id)
+
+
+@router.post("/music/playlists/{playlist_id}/stop", tags=["music"])
+def stop_music_broadcast(playlist_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.music_broadcast import stop_music_playlist
+    return stop_music_playlist(db, playlist_id)
+
+
+@router.get("/music/playlists/{playlist_id}/status", tags=["music"])
+def music_broadcast_status(playlist_id: int, db: Session = Depends(get_db)):
+    from app.modules.content.music_broadcast import get_music_playlist_status
+    return get_music_playlist_status(db, playlist_id)
