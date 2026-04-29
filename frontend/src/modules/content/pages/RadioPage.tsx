@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Radio, Music, ListMusic, Plus, Trash2, Pencil, X, Play, Square,
   Search, Clock, Link2, Image, Film, Wifi, ChevronUp, ChevronDown, Hash,
+  Youtube, Upload, Users, Loader2, CheckCircle, AlertCircle,
 } from 'lucide-react'
 import {
   contentApi, Category, RadioContent, RadioContentCreate,
   musicApi, MusicTrack, MusicTrackCreate, MusicPlaylist, MusicPlaylistCreate,
-  radioApi,
+  radioApi, YoutubeDownloadPayload,
 } from '../services/contentApi'
 import { serversApi, Server } from '../../servers/services/serversApi'
+import { vpnApi, VpnClient } from '../../vpn/services/vpnApi'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,15 @@ function fmtDuration(secs: number | null): string {
   if (secs == null) return '-'
   const m = Math.floor(secs / 60)
   const s = secs % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function fmtElapsed(secs: number | null): string {
+  if (secs == null) return ''
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
@@ -63,6 +74,66 @@ function DeleteModal({ title, onConfirm, onCancel, loading }: {
       </div>
     </div>
   )
+}
+
+// ─── Visual Upload Button ──────────────────────────────────────────────────────
+
+function VisualUploadButton({
+  onUploaded,
+  accept = 'image/*,video/mp4,video/webm',
+}: {
+  onUploaded: (url: string) => void
+  accept?: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFile(file: File) {
+    setUploading(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const result = await musicApi.upload.visual(fd)
+      onUploaded(result.url)
+    } catch {
+      setError('Yuklenemedi')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition disabled:opacity-60"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+      >
+        {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+        {uploading ? 'Yukleniyor...' : 'Yukle'}
+      </button>
+      {error && <span className="text-xs text-rose-500">{error}</span>}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) { handleFile(f); e.target.value = '' } }}
+      />
+    </div>
+  )
+}
+
+// ─── Visual Preview ────────────────────────────────────────────────────────────
+
+function VisualPreview({ url, type }: { url: string | null; type: 'video' | 'image' | 'none' }) {
+  if (!url || type === 'none') return null
+  if (type === 'image') return <img src={url} alt="" className="mt-2 h-20 w-32 rounded-xl object-cover border border-slate-200" />
+  if (type === 'video') return <video src={url} className="mt-2 h-20 w-32 rounded-xl object-cover border border-slate-200" muted />
+  return null
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -156,7 +227,14 @@ function RadioChannelsTab() {
           {form.visual_type !== 'none' && (
             <div>
               <label className="panel-label">Gorsel URL (dongu)</label>
-              <input className="panel-input" value={form.visual_url ?? ''} onChange={e => setForm(f => ({ ...f, visual_url: e.target.value || null }))} placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input className="panel-input flex-1" value={form.visual_url ?? ''} onChange={e => setForm(f => ({ ...f, visual_url: e.target.value || null }))} placeholder="https://..." />
+                <VisualUploadButton
+                  accept={form.visual_type === 'image' ? 'image/*' : 'video/mp4,video/webm'}
+                  onUploaded={url => setForm(f => ({ ...f, visual_url: url }))}
+                />
+              </div>
+              <VisualPreview url={form.visual_url} type={form.visual_type ?? 'none'} />
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -259,6 +337,297 @@ function RadioChannelsTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// YouTube Download Modal
+// ══════════════════════════════════════════════════════════════════════════════
+
+function YoutubeDownloadModal({ categories, onClose, onDone }: {
+  categories: Category[]
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [form, setForm] = useState<YoutubeDownloadPayload>({ url: '', title: null, artist: null, category_id: null, vpn_client_id: null })
+  const [taskId, setTaskId] = useState<string | null>(null)
+  const [taskStatus, setTaskStatus] = useState<{ status: string; progress: number; error: string | null } | null>(null)
+  const [polling, setPolling] = useState(false)
+
+  const vpnQ = useQuery({ queryKey: ['vpn-clients'], queryFn: () => vpnApi.listClients() })
+  const vpnClients: VpnClient[] = vpnQ.data ?? []
+
+  const downloadMutation = useMutation({
+    mutationFn: (p: YoutubeDownloadPayload) => musicApi.download.youtube(p),
+    onSuccess: (data) => {
+      setTaskId(data.task_id)
+      setTaskStatus({ status: data.status, progress: data.progress, error: data.error })
+      setPolling(true)
+      pollStatus(data.task_id)
+    },
+  })
+
+  async function pollStatus(id: string) {
+    let done = false
+    while (!done) {
+      await new Promise(r => setTimeout(r, 2000))
+      try {
+        const s = await musicApi.download.status(id)
+        setTaskStatus({ status: s.status, progress: s.progress, error: s.error })
+        if (s.status === 'done' || s.status === 'error') {
+          done = true
+          setPolling(false)
+          if (s.status === 'done') { onDone() }
+        }
+      } catch {
+        done = true
+        setPolling(false)
+      }
+    }
+  }
+
+  const isDone = taskStatus?.status === 'done'
+  const isError = taskStatus?.status === 'error'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-red-100"><Youtube size={16} className="text-red-600" /></span>
+            <h3 className="text-lg font-semibold text-slate-900">YouTube'dan Indir</h3>
+          </div>
+          <button type="button" className="rounded-full p-1 hover:bg-slate-100" onClick={onClose} disabled={polling}><X size={18} /></button>
+        </div>
+
+        {!taskId ? (
+          <div className="space-y-4">
+            <div>
+              <label className="panel-label">YouTube URL *</label>
+              <input className="panel-input" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://youtube.com/watch?v=..." />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="panel-label">Baslik (opsiyonel)</label>
+                <input className="panel-input" value={form.title ?? ''} onChange={e => setForm(f => ({ ...f, title: e.target.value || null }))} placeholder="Sarki adi" />
+              </div>
+              <div>
+                <label className="panel-label">Artist (opsiyonel)</label>
+                <input className="panel-input" value={form.artist ?? ''} onChange={e => setForm(f => ({ ...f, artist: e.target.value || null }))} placeholder="Artist adi" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="panel-label">Kategori</label>
+                <select className="panel-select" value={form.category_id ?? ''} onChange={e => setForm(f => ({ ...f, category_id: e.target.value ? Number(e.target.value) : null }))}>
+                  <option value="">Seciniz</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="panel-label">VPN Client (opsiyonel)</label>
+                <select className="panel-select" value={form.vpn_client_id ?? ''} onChange={e => setForm(f => ({ ...f, vpn_client_id: e.target.value ? Number(e.target.value) : null }))}>
+                  <option value="">Dogrudan</option>
+                  {vpnClients.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button type="button" className="secondary-button" onClick={onClose}><X size={16} />Iptal</button>
+              <button type="button"
+                className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition disabled:opacity-60"
+                disabled={!form.url || downloadMutation.isPending}
+                onClick={() => downloadMutation.mutate(form)}>
+                {downloadMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Youtube size={15} />}
+                {downloadMutation.isPending ? 'Baslatiliyor...' : 'Indir'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-700">
+                  {isDone ? 'Tamamlandi!' : isError ? 'Hata!' : 'Indiriliyor...'}
+                </span>
+                <span className="text-sm font-mono text-slate-500">{taskStatus?.progress ?? 0}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-emerald-500' : isError ? 'bg-rose-500' : 'bg-blue-500'}`}
+                  style={{ width: `${taskStatus?.progress ?? 0}%` }}
+                />
+              </div>
+              {polling && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Durum kontrol ediliyor... ({taskStatus?.status})</span>
+                </div>
+              )}
+              {isDone && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600">
+                  <CheckCircle size={14} />
+                  <span>Muzik basariyla indirildi ve kutuphanene eklendi.</span>
+                </div>
+              )}
+              {isError && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-rose-600">
+                  <AlertCircle size={14} />
+                  <span>{taskStatus?.error ?? 'Bilinmeyen hata'}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <button type="button" className="secondary-button" onClick={onClose} disabled={polling}>
+                {isDone || isError ? 'Kapat' : 'Arka Planda Calis'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// File Upload Modal
+// ══════════════════════════════════════════════════════════════════════════════
+
+function FileUploadModal({ categories, onClose, onDone }: {
+  categories: Category[]
+  onClose: () => void
+  onDone: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [title, setTitle] = useState('')
+  const [artist, setArtist] = useState('')
+  const [categoryId, setCategoryId] = useState<number | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleUpload() {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    setProgress(0)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('title', title || file.name.replace(/\.[^.]+$/, ''))
+      if (artist) fd.append('artist', artist)
+      if (categoryId != null) fd.append('category_id', String(categoryId))
+      // Simüle progress (real upload uses XHR for progress tracking, API call here)
+      const timer = setInterval(() => setProgress(p => Math.min(p + 10, 90)), 300)
+      await musicApi.upload.file(fd)
+      clearInterval(timer)
+      setProgress(100)
+      setDone(true)
+      onDone()
+    } catch {
+      setError('Yukleme basarisiz oldu. Lutfen tekrar deneyin.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100"><Upload size={16} className="text-blue-600" /></span>
+            <h3 className="text-lg font-semibold text-slate-900">Dosyadan Muzik Yukle</h3>
+          </div>
+          <button type="button" className="rounded-full p-1 hover:bg-slate-100" onClick={onClose} disabled={uploading}><X size={18} /></button>
+        </div>
+
+        <div className="space-y-4">
+          {/* File selector */}
+          <div>
+            <label className="panel-label">Ses Dosyasi *</label>
+            <div
+              className="mt-1 flex items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 px-4 py-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition"
+              onClick={() => fileRef.current?.click()}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 flex-shrink-0">
+                <Music size={18} className="text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {file
+                  ? <p className="truncate text-sm font-medium text-slate-800">{file.name}</p>
+                  : <p className="text-sm text-slate-400">Dosya secmek icin tiklayin (MP3, AAC, FLAC...)</p>}
+                {file && <p className="text-xs text-slate-400 mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+              </div>
+              <Upload size={16} className="text-slate-400 flex-shrink-0" />
+            </div>
+            <input ref={fileRef} type="file" accept="audio/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); if (!title) setTitle(f.name.replace(/\.[^.]+$/, '')) } }} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="panel-label">Baslik</label>
+              <input className="panel-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Sarki adi" />
+            </div>
+            <div>
+              <label className="panel-label">Artist</label>
+              <input className="panel-input" value={artist} onChange={e => setArtist(e.target.value)} placeholder="Artist adi" />
+            </div>
+          </div>
+
+          <div>
+            <label className="panel-label">Kategori</label>
+            <select className="panel-select" value={categoryId ?? ''} onChange={e => setCategoryId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Seciniz</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Progress */}
+          {(uploading || done) && (
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">{done ? 'Tamamlandi!' : 'Yukleniyor...'}</span>
+                <span className="text-xs font-mono text-slate-500">{progress}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-300 ${done ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              <AlertCircle size={15} />
+              {error}
+            </div>
+          )}
+
+          {done && (
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              <CheckCircle size={15} />
+              Muzik basariyla yuklendi ve kutuphanene eklendi.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button type="button" className="secondary-button" onClick={onClose} disabled={uploading}><X size={16} />Kapat</button>
+          {!done && (
+            <button type="button"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-60"
+              disabled={!file || uploading}
+              onClick={handleUpload}>
+              {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+              {uploading ? 'Yukleniyor...' : 'Yukle'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // TAB 2 — Muzik Kutuphanesi
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -267,6 +636,8 @@ function MusicLibraryTab() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<MusicTrack | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showYoutube, setShowYoutube] = useState(false)
+  const [showFileUpload, setShowFileUpload] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedCat, setSelectedCat] = useState<number | null>(null)
   const [form, setForm] = useState<MusicTrackCreate>({ title: '', artist: null, stream_url: null, category_id: null, cover_url: null })
@@ -368,9 +739,21 @@ function MusicLibraryTab() {
             </button>
           ))}
         </div>
-        <button type="button" className="primary-button" onClick={() => { resetForm(); setShowAdd(true) }}>
-          <Plus size={16} />Parca Ekle
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
+            onClick={() => setShowYoutube(true)}>
+            <Youtube size={15} />YouTube'dan Indir
+          </button>
+          <button type="button"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+            onClick={() => setShowFileUpload(true)}>
+            <Upload size={15} />Dosya Yukle
+          </button>
+          <button type="button" className="primary-button" onClick={() => { resetForm(); setShowAdd(true) }}>
+            <Plus size={16} />Parca Ekle
+          </button>
+        </div>
       </div>
 
       <div className="table-shell overflow-x-auto">
@@ -428,6 +811,20 @@ function MusicLibraryTab() {
 
       {showAdd && <TrackModal isEdit={false} />}
       {editItem && <TrackModal isEdit={true} />}
+      {showYoutube && (
+        <YoutubeDownloadModal
+          categories={categories}
+          onClose={() => setShowYoutube(false)}
+          onDone={() => { queryClient.invalidateQueries({ queryKey: ['music-tracks'] }) }}
+        />
+      )}
+      {showFileUpload && (
+        <FileUploadModal
+          categories={categories}
+          onClose={() => setShowFileUpload(false)}
+          onDone={() => { queryClient.invalidateQueries({ queryKey: ['music-tracks'] }) }}
+        />
+      )}
       {deleteId !== null && (
         <DeleteModal
           title={allTracks.find(t => t.id === deleteId)?.title ?? String(deleteId)}
@@ -594,6 +991,29 @@ function MusicPlaylistsTab() {
   })
   const serversQ = useQuery({ queryKey: ['servers'], queryFn: () => serversApi.list() })
 
+  // Per-playlist status polling for playing playlists
+  const statusQueries = useQuery({
+    queryKey: ['music-playlists-status'],
+    queryFn: async () => {
+      const playlists: MusicPlaylist[] = playlistsQ.data ?? []
+      const playingIds = playlists.filter(p => p.status === 'playing').map(p => p.id)
+      const results: Record<number, { elapsed_seconds: number | null; current_title: string | null }> = {}
+      await Promise.all(
+        playingIds.map(async id => {
+          try {
+            const s = await musicApi.playlists.status(id)
+            results[id] = { elapsed_seconds: s.elapsed_seconds, current_title: s.current_title }
+          } catch {
+            results[id] = { elapsed_seconds: null, current_title: null }
+          }
+        })
+      )
+      return results
+    },
+    refetchInterval: 5000,
+    enabled: (playlistsQ.data ?? []).some(p => p.status === 'playing'),
+  })
+
   const addMutation = useMutation({
     mutationFn: (p: MusicPlaylistCreate) => musicApi.playlists.create(p),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['music-playlists'] }); setShowAdd(false); resetForm() },
@@ -608,15 +1028,22 @@ function MusicPlaylistsTab() {
   })
   const startMutation = useMutation({
     mutationFn: (id: number) => musicApi.playlists.start(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['music-playlists'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['music-playlists'] })
+      queryClient.invalidateQueries({ queryKey: ['music-playlists-status'] })
+    },
   })
   const stopMutation = useMutation({
     mutationFn: (id: number) => musicApi.playlists.stop(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['music-playlists'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['music-playlists'] })
+      queryClient.invalidateQueries({ queryKey: ['music-playlists-status'] })
+    },
   })
 
   const playlists: MusicPlaylist[] = playlistsQ.data ?? []
   const servers: Server[] = serversQ.data ?? []
+  const statusMap = statusQueries.data ?? {}
 
   function resetForm() { setForm({ name: '', description: null, visual_url: null, visual_type: 'none', server_id: null }) }
 
@@ -656,14 +1083,21 @@ function MusicPlaylistsTab() {
               <label className="panel-label">Sunucu (opsiyonel)</label>
               <select className="panel-select" value={form.server_id ?? ''} onChange={e => setForm(f => ({ ...f, server_id: e.target.value ? Number(e.target.value) : null }))}>
                 <option value="">Varsayilan</option>
-                {servers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {servers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>)}
               </select>
             </div>
           </div>
           {form.visual_type !== 'none' && (
             <div>
               <label className="panel-label">Gorsel URL</label>
-              <input className="panel-input" value={form.visual_url ?? ''} onChange={e => setForm(f => ({ ...f, visual_url: e.target.value || null }))} placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input className="panel-input flex-1" value={form.visual_url ?? ''} onChange={e => setForm(f => ({ ...f, visual_url: e.target.value || null }))} placeholder="https://..." />
+                <VisualUploadButton
+                  accept={form.visual_type === 'image' ? 'image/*' : 'video/mp4,video/webm'}
+                  onUploaded={url => setForm(f => ({ ...f, visual_url: url }))}
+                />
+              </div>
+              <VisualPreview url={form.visual_url} type={form.visual_type ?? 'none'} />
             </div>
           )}
         </div>
@@ -694,65 +1128,99 @@ function MusicPlaylistsTab() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {playlists.map(pl => (
-          <div key={pl.id} className="glass-panel p-5 flex flex-col gap-4">
-            {/* card header */}
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                {pl.visual_url && pl.visual_type === 'image'
-                  ? <img src={pl.visual_url} alt="" className="h-12 w-12 rounded-2xl object-cover" />
-                  : <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-sky-100">
-                      <ListMusic size={20} className="text-violet-500" />
-                    </span>}
+        {playlists.map(pl => {
+          const plStatus = statusMap[pl.id]
+          const isPlaying = pl.status === 'playing'
+          const serverName = servers.find(s => s.id === pl.server_id)?.name
+
+          return (
+            <div key={pl.id} className={`glass-panel p-5 flex flex-col gap-4 transition ${isPlaying ? 'ring-2 ring-emerald-300 ring-offset-1' : ''}`}>
+              {/* card header */}
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 relative">
+                  {pl.visual_url && pl.visual_type === 'image'
+                    ? <img src={pl.visual_url} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+                    : <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-sky-100">
+                        <ListMusic size={20} className="text-violet-500" />
+                      </span>}
+                  {isPlaying && (
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white" />
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-semibold text-slate-900 truncate">{pl.name}</h4>
+                    <StatusBadge status={pl.status} />
+                  </div>
+                  {pl.description && <p className="mt-0.5 text-xs text-slate-500 truncate">{pl.description}</p>}
+                  <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-400 flex-wrap">
+                    <span className="flex items-center gap-1"><Hash size={11} />{pl.items.length} parca</span>
+                    <span className="flex items-center gap-1"><Users size={11} />0 izleyici</span>
+                    <VisualTypeBadge type={pl.visual_type} />
+                    {serverName && <span className="text-slate-400">{serverName}</span>}
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-semibold text-slate-900 truncate">{pl.name}</h4>
-                  <StatusBadge status={pl.status} />
+
+              {/* live status bar */}
+              {isPlaying && plStatus && (
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 space-y-1">
+                  {plStatus.current_title && (
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2 flex-shrink-0">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      <p className="text-xs text-emerald-700 font-medium truncate">{plStatus.current_title}</p>
+                    </div>
+                  )}
+                  {plStatus.elapsed_seconds != null && (
+                    <p className="text-xs text-emerald-600 font-mono pl-4">{fmtElapsed(plStatus.elapsed_seconds)} gecti</p>
+                  )}
                 </div>
-                {pl.description && <p className="mt-0.5 text-xs text-slate-500 truncate">{pl.description}</p>}
-                <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-400">
-                  <span className="flex items-center gap-1"><Hash size={11} />{pl.items.length} parca</span>
-                  <VisualTypeBadge type={pl.visual_type} />
+              )}
+
+              {/* stream url */}
+              {pl.stream_url && (
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-400 mb-0.5">Stream URL</p>
+                  <p className="text-xs font-mono text-slate-600 truncate">{pl.stream_url}</p>
                 </div>
+              )}
+
+              {/* actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                {pl.status === 'stopped'
+                  ? <button type="button"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:bg-emerald-600 active:scale-95 transition disabled:opacity-60"
+                      disabled={startMutation.isPending}
+                      onClick={() => startMutation.mutate(pl.id)}>
+                      {startMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                      Baslat
+                    </button>
+                  : <button type="button"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)] hover:bg-rose-600 active:scale-95 transition disabled:opacity-60"
+                      disabled={stopMutation.isPending}
+                      onClick={() => stopMutation.mutate(pl.id)}>
+                      {stopMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
+                      Durdur
+                    </button>}
+                <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => setDetailPlaylist(pl)}>
+                  <ListMusic size={13} />Parcalar
+                </button>
+                <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => openEdit(pl)}>
+                  <Pencil size={13} />Duzenle
+                </button>
+                <button type="button" className="danger-button px-3 py-2 text-xs" onClick={() => setDeleteId(pl.id)}>
+                  <Trash2 size={13} />
+                </button>
               </div>
             </div>
-
-            {/* stream url */}
-            {pl.stream_url && (
-              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-400 mb-0.5">Stream URL</p>
-                <p className="text-xs font-mono text-slate-600 truncate">{pl.stream_url}</p>
-              </div>
-            )}
-
-            {/* actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              {pl.status === 'stopped'
-                ? <button type="button"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white shadow-[0_8px_20px_rgba(16,185,129,0.2)] hover:bg-emerald-600 transition disabled:opacity-60"
-                    disabled={startMutation.isPending}
-                    onClick={() => startMutation.mutate(pl.id)}>
-                    <Play size={13} />Baslat
-                  </button>
-                : <button type="button"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white shadow-[0_8px_20px_rgba(244,63,94,0.16)] hover:bg-rose-600 transition disabled:opacity-60"
-                    disabled={stopMutation.isPending}
-                    onClick={() => stopMutation.mutate(pl.id)}>
-                    <Square size={13} />Durdur
-                  </button>}
-              <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => setDetailPlaylist(pl)}>
-                <ListMusic size={13} />Parcalar
-              </button>
-              <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => openEdit(pl)}>
-                <Pencil size={13} />Duzenle
-              </button>
-              <button type="button" className="danger-button px-3 py-2 text-xs" onClick={() => setDeleteId(pl.id)}>
-                <Trash2 size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {showAdd && <PlaylistModal isEdit={false} />}

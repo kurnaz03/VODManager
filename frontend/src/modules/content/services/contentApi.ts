@@ -466,7 +466,48 @@ export interface MusicPlaylistStatus {
   current_title: string | null
 }
 
+export interface MusicDownloadTask {
+  task_id: string
+  status: 'pending' | 'downloading' | 'processing' | 'done' | 'error'
+  progress: number
+  title: string | null
+  error: string | null
+  track_id: number | null
+}
+
+export interface YoutubeDownloadPayload {
+  url: string
+  title?: string | null
+  artist?: string | null
+  category_id?: number | null
+  vpn_client_id?: number | null
+}
+
 export const musicApi = {
+  download: {
+    async youtube(payload: YoutubeDownloadPayload) {
+      const r = await api.post<MusicDownloadTask>('/content/music/download-youtube', payload)
+      return r.data
+    },
+    async status(taskId: string) {
+      const r = await api.get<MusicDownloadTask>(`/content/music/download-status/${taskId}`)
+      return r.data
+    },
+  },
+  upload: {
+    async file(formData: FormData) {
+      const r = await api.post<MusicTrack>('/content/music/upload-file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return r.data
+    },
+    async visual(formData: FormData) {
+      const r = await api.post<{ url: string }>('/content/upload-visual', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return r.data
+    },
+  },
   tracks: {
     async list(categoryId?: number) {
       const params = categoryId != null ? { category_id: categoryId } : {}
