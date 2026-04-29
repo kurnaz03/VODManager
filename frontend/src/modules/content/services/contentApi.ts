@@ -356,18 +356,178 @@ export const tvApi = {
   },
 }
 
+export interface RadioContent {
+  id: number
+  title: string
+  description: string | null
+  category_id: number | null
+  category_name: string | null
+  logo_url: string | null
+  stream_url: string | null
+  visual_url: string | null
+  visual_type: 'video' | 'image' | 'none'
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RadioContentCreate {
+  title: string
+  description?: string | null
+  category_id?: number | null
+  logo_url?: string | null
+  stream_url?: string | null
+  visual_url?: string | null
+  visual_type?: 'video' | 'image' | 'none'
+  is_public?: boolean
+}
+
 export const radioApi = {
   async list(categoryId?: number) {
     const params = categoryId != null ? { category_id: categoryId } : {}
-    const r = await api.get<StreamContent[]>('/radio', { params })
+    const r = await api.get<RadioContent[]>('/radio', { params })
     return r.data
   },
-  async update(id: number, payload: Partial<StreamContent>) {
-    const r = await api.put<StreamContent>(`/radio/${id}`, payload)
+  async create(payload: RadioContentCreate) {
+    const r = await api.post<RadioContent>('/radio', payload)
+    return r.data
+  },
+  async update(id: number, payload: Partial<RadioContentCreate>) {
+    const r = await api.put<RadioContent>(`/radio/${id}`, payload)
     return r.data
   },
   async remove(id: number) {
     await api.delete(`/radio/${id}`)
+  },
+}
+
+// ── Music API ─────────────────────────────────────────────────────────────────
+
+export interface MusicTrack {
+  id: number
+  title: string
+  artist: string | null
+  duration_seconds: number | null
+  file_path: string | null
+  stream_url: string | null
+  category_id: number | null
+  category_name: string | null
+  cover_url: string | null
+  created_at: string
+}
+
+export interface MusicTrackCreate {
+  title: string
+  artist?: string | null
+  stream_url?: string | null
+  category_id?: number | null
+  cover_url?: string | null
+}
+
+export interface MusicPlaylistItem {
+  id: number
+  playlist_id: number
+  track_id: number
+  position: number
+  track: MusicTrack
+}
+
+export interface MusicPlaylist {
+  id: number
+  name: string
+  description: string | null
+  visual_url: string | null
+  visual_type: 'video' | 'image' | 'none'
+  is_active: boolean
+  server_id: number | null
+  ffmpeg_pid: number | null
+  stream_url: string | null
+  status: 'stopped' | 'playing'
+  started_at: string | null
+  items: MusicPlaylistItem[]
+  created_at: string
+}
+
+export interface MusicPlaylistCreate {
+  name: string
+  description?: string | null
+  visual_url?: string | null
+  visual_type?: 'video' | 'image' | 'none'
+  server_id?: number | null
+}
+
+export interface MusicPlaylistStatus {
+  id: number
+  status: string
+  is_running: boolean
+  pid: number | null
+  stream_url: string | null
+  elapsed_seconds: number | null
+  current_title: string | null
+}
+
+export const musicApi = {
+  tracks: {
+    async list(categoryId?: number) {
+      const params = categoryId != null ? { category_id: categoryId } : {}
+      const r = await api.get<MusicTrack[]>('/music/tracks', { params })
+      return r.data
+    },
+    async create(payload: MusicTrackCreate) {
+      const r = await api.post<MusicTrack>('/music/tracks', payload)
+      return r.data
+    },
+    async update(id: number, payload: Partial<MusicTrackCreate>) {
+      const r = await api.put<MusicTrack>(`/music/tracks/${id}`, payload)
+      return r.data
+    },
+    async remove(id: number) {
+      await api.delete(`/music/tracks/${id}`)
+    },
+  },
+  playlists: {
+    async list() {
+      const r = await api.get<MusicPlaylist[]>('/music/playlists')
+      return r.data
+    },
+    async get(id: number) {
+      const r = await api.get<MusicPlaylist>(`/music/playlists/${id}`)
+      return r.data
+    },
+    async create(payload: MusicPlaylistCreate) {
+      const r = await api.post<MusicPlaylist>('/music/playlists', payload)
+      return r.data
+    },
+    async update(id: number, payload: Partial<MusicPlaylistCreate>) {
+      const r = await api.put<MusicPlaylist>(`/music/playlists/${id}`, payload)
+      return r.data
+    },
+    async remove(id: number) {
+      await api.delete(`/music/playlists/${id}`)
+    },
+    async addItem(id: number, track_id: number, position?: number) {
+      const r = await api.post<MusicPlaylistItem>(`/music/playlists/${id}/items`, { track_id, position })
+      return r.data
+    },
+    async removeItem(id: number, item_id: number) {
+      await api.delete(`/music/playlists/${id}/items/${item_id}`)
+    },
+    async reorderItems(id: number, item_ids: number[]) {
+      const r = await api.put<MusicPlaylist>(`/music/playlists/${id}/items/reorder`, { item_ids })
+      return r.data
+    },
+    async start(id: number) {
+      const r = await api.post<MusicPlaylistStatus>(`/music/playlists/${id}/start`)
+      return r.data
+    },
+    async stop(id: number) {
+      const r = await api.post<MusicPlaylistStatus>(`/music/playlists/${id}/stop`)
+      return r.data
+    },
+    async status(id: number) {
+      const r = await api.get<MusicPlaylistStatus>(`/music/playlists/${id}/status`)
+      return r.data
+    },
   },
 }
 
