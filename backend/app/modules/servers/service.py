@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -79,6 +80,73 @@ def _fetch_server_facts(client: paramiko.SSHClient) -> dict[str, Any]:
         "cpu_info": cpu_info or None,
         "ram_total": ram_total,
         "disk_total": disk_total,
+    }
+
+
+def _local_exec(command: str) -> str:
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=settings.COMMAND_TIMEOUT_SECONDS,
+    )
+    return result.stdout.strip()
+
+
+def _fetch_local_facts() -> dict[str, Any]:
+    os_info = _local_exec("uname -srvmo 2>/dev/null || head -n1 /etc/os-release 2>/dev/null")
+    cpu_info = _local_exec("grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | xargs echo || nproc 2>/dev/null")
+    ram_total = _safe_int(_local_exec("free -m 2>/dev/null | awk '/Mem:/ {print $2}'"))
+    disk_total = _safe_int(_local_exec("df -BM / 2>/dev/null | awk 'NR==2 {gsub(/M/,\"\",$2); print $2}'"))
+    return {
+        "os_info": os_info or None,
+        "cpu_info": cpu_info or None,
+        "ram_total": ram_total,
+        "disk_total": disk_total,
+    }
+
+
+def _collect_local_metrics(server: Server, previous_metric: ServerMetric | None) -> dict[str, Any]:
+    cpu_percent = _safe_float(_local_exec("top -bn1 2>/dev/null | awk '/Cpu\\(s\\)/ {print 100 - $8}'"))
+    ram_parts = _local_exec("free -m 2>/dev/null | awk '/Mem:/ {print $3\" \"$2\" \"($3/$2)*100}'").split()
+    disk_parts = _local_exec("df -BM / 2>/dev/null | awk 'NR==2 {gsub(/M/,\"\",$3); gsub(/%/,\"\",$5); print $3\" \"$5}'").split()
+
+    iface = (server.network_interface or "").strip()
+    if iface:
+        net_cmd = f"awk -F'[: ]+' '$2==\"{iface}\" {{print $3\" \"$11}}' /proc/net/dev 2>/dev/null"
+    else:
+        net_cmd = "awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx+=$3; tx+=$11} END {print rx\" \"tx}' /proc/net/dev 2>/dev/null"
+
+    network_parts = _local_exec(net_cmd).split()
+    active_connections = _safe_int(_local_exec("ss -ant 2>/dev/null | tail -n +2 | wc -l")) or 0
+    ram_used = _safe_int(ram_parts[0] if len(ram_parts) > 0 else None) or 0
+    ram_percent = _safe_float(ram_parts[2] if len(ram_parts) > 2 else None)
+    disk_used = _safe_int(disk_parts[0] if len(disk_parts) > 0 else None) or 0
+    disk_percent = _safe_float(disk_parts[1] if len(disk_parts) > 1 else None)
+    rx_bytes = _safe_int(network_parts[0] if len(network_parts) > 0 else None) or 0
+    tx_bytes = _safe_int(network_parts[1] if len(network_parts) > 1 else None) or 0
+
+    network_in_mbps = 0.0
+    network_out_mbps = 0.0
+    if previous_metric and previous_metric.collected_at:
+        elapsed = max((datetime.now(timezone.utc) - previous_metric.collected_at).total_seconds(), 1)
+        network_in_mbps = round(max(rx_bytes - previous_metric.network_rx_bytes, 0) * 8 / 1_000_000 / elapsed, 4)
+        network_out_mbps = round(max(tx_bytes - previous_metric.network_tx_bytes, 0) * 8 / 1_000_000 / elapsed, 4)
+
+    facts = _fetch_local_facts()
+    return {
+        "cpu_percent": cpu_percent,
+        "ram_percent": ram_percent,
+        "ram_used": ram_used,
+        "disk_percent": disk_percent,
+        "disk_used": disk_used,
+        "network_in_mbps": network_in_mbps,
+        "network_out_mbps": network_out_mbps,
+        "active_connections": active_connections,
+        "network_rx_bytes": rx_bytes,
+        "network_tx_bytes": tx_bytes,
+        "facts": facts,
     }
 
 
@@ -248,6 +316,27 @@ def delete_server(db: Session, server_id: int) -> None:
 
 def check_server(db: Session, server_id: int) -> dict[str, Any]:
     server = get_server(db, server_id)
+
+    if server.server_type == ServerType.main:
+        try:
+            facts = _fetch_local_facts()
+            server.status = ServerStatus.online
+            server.os_info = facts.get("os_info")
+            server.cpu_info = facts.get("cpu_info")
+            server.ram_total = facts.get("ram_total")
+            server.disk_total = facts.get("disk_total")
+            db.add(server)
+            db.commit()
+            return {"ok": True, "message": "Lokal sunucu kontrol basarili", **facts}
+        except Exception as exc:
+            server.status = ServerStatus.error
+            db.add(server)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Lokal metrik toplanamadi: {exc}",
+            ) from exc
+
     payload = ServerCheckPayload(
         ip_address=server.ip_address,
         ssh_port=server.ssh_port,
@@ -454,7 +543,10 @@ def collect_metrics(db: Session) -> int:
             .first()
         )
         try:
-            metric_data = _collect_metric_via_ssh(server, previous_metric)
+            if server.server_type == ServerType.main:
+                metric_data = _collect_local_metrics(server, previous_metric)
+            else:
+                metric_data = _collect_metric_via_ssh(server, previous_metric)
             metric = ServerMetric(
                 server_id=server.id,
                 cpu_percent=metric_data["cpu_percent"],

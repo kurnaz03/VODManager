@@ -129,6 +129,39 @@ npm run build 2>&1 | tail -3
 ln -sfn "$APP_DIR/app/frontend/dist" "$APP_DIR/frontend-dist"
 echo "Frontend OK"
 
+echo "[8.5/10] OpenVPN PKI ayarlaniyor..."
+EASYRSA_DIR="/etc/openvpn/easy-rsa"
+mkdir -p "$EASYRSA_DIR"
+cp -rn /usr/share/easy-rsa/* "$EASYRSA_DIR/"
+cd "$EASYRSA_DIR"
+
+export EASYRSA_BATCH=1
+
+if [ ! -d "$EASYRSA_DIR/pki" ]; then
+    ./easyrsa init-pki
+fi
+
+if [ ! -f "$EASYRSA_DIR/pki/ca.crt" ]; then
+    ./easyrsa build-ca nopass
+fi
+
+if [ ! -f "$EASYRSA_DIR/pki/issued/server.crt" ]; then
+    ./easyrsa build-server-full server nopass
+fi
+
+if [ ! -f "$EASYRSA_DIR/pki/dh.pem" ]; then
+    ./easyrsa gen-dh
+fi
+
+if [ ! -f /etc/openvpn/ta.key ]; then
+    openvpn --genkey secret /etc/openvpn/ta.key
+fi
+
+mkdir -p /etc/openvpn/clients
+chmod 640 /etc/openvpn/ta.key
+chown root:www-data /etc/openvpn/ta.key
+echo "OpenVPN PKI OK"
+
 echo "[9/10] Systemd servisleri olusturuluyor..."
 cat > /etc/systemd/system/vod-manager-api.service << EOF
 [Unit]
