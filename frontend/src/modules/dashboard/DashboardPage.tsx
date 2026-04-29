@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
+  Activity,
   Clapperboard,
   Cpu,
   Crown,
@@ -9,8 +10,10 @@ import {
   Grid3X3,
   HardDrive,
   Layers3,
+  ListVideo,
   MemoryStick,
   Monitor,
+  PlayCircle,
   Radio,
   ServerCog,
   Users,
@@ -177,6 +180,12 @@ export default function DashboardPage() {
         total_tv_channels: number
         total_radio: number
         uptime_seconds: number
+        online_users: number
+        total_net_in_mbps: number
+        total_net_out_mbps: number
+        online_streams: number
+        offline_streams: number
+        online_vod_channels: number
         recent_activity: { action: string; ip_address: string | null; created_at: string | null }[]
       }>('/admin/dashboard')
       return response.data
@@ -232,6 +241,13 @@ export default function DashboardPage() {
   const totalMovies = dashboardQuery.data?.total_movies ?? 0
   const totalTvChannels = dashboardQuery.data?.total_tv_channels ?? 0
   const totalRadio = dashboardQuery.data?.total_radio ?? 0
+
+  const onlineUsers = dashboardQuery.data?.online_users ?? 0
+  const totalNetIn = dashboardQuery.data?.total_net_in_mbps ?? 0
+  const totalNetOut = dashboardQuery.data?.total_net_out_mbps ?? 0
+  const onlineStreams = dashboardQuery.data?.online_streams ?? 0
+  const offlineStreams = dashboardQuery.data?.offline_streams ?? 0
+  const onlineVod = dashboardQuery.data?.online_vod_channels ?? 0
 
   return (
     <div className="space-y-6">
@@ -309,6 +325,59 @@ export default function DashboardPage() {
             </span>
           }
         />
+      </div>
+
+      {/* ── Online Status Cards ── */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+        {/* Online Kullanicilar */}
+        <div className="glass-panel flex items-center gap-4 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500">
+            <Activity size={22} className="text-white" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{onlineUsers}</div>
+            <div className="text-xs text-slate-500">Online Kullanicilar</div>
+          </div>
+        </div>
+
+        {/* Network Toplam */}
+        <div className="glass-panel flex items-center gap-4 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-500">
+            <Wifi size={22} className="text-white" />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900">
+              ↓ {fmtMbps(totalNetIn)} ↑ {fmtMbps(totalNetOut)}
+            </div>
+            <div className="text-xs text-slate-500">Network Toplam</div>
+          </div>
+        </div>
+
+        {/* Online/Offline Streams */}
+        <div className="glass-panel flex items-center gap-4 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-green-500">
+            <PlayCircle size={22} className="text-white" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">
+              <span className="text-green-600">{onlineStreams}</span>
+              <span className="text-sm text-slate-400 mx-1">/</span>
+              <span className="text-red-500">{offlineStreams}</span>
+            </div>
+            <div className="text-xs text-slate-500">Online / Offline Streams</div>
+          </div>
+        </div>
+
+        {/* Online VOD Channels */}
+        <div className="glass-panel flex items-center gap-4 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-500">
+            <ListVideo size={22} className="text-white" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{onlineVod}</div>
+            <div className="text-xs text-slate-500">Online VOD Channels</div>
+          </div>
+        </div>
       </div>
 
       {/* ── Server pool + Today's series ── */}
