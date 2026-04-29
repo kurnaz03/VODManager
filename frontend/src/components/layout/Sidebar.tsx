@@ -2,22 +2,24 @@ import { useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
+  Clapperboard,
   Download,
   Film,
   FolderKanban,
   Layers3,
   LayoutDashboard,
+  ListVideo,
   MonitorDot,
   MonitorPlay,
   Radio,
   Settings,
   Shield,
   ShieldCheck,
-  Tv,
-  X,
   Sliders,
-  ListVideo,
+  SlidersHorizontal,
   UserCog,
+  Wrench,
+  X,
 } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useBrandingStore } from '../../store/brandingStore'
@@ -38,24 +40,41 @@ const groups = [
     ],
   },
   {
-    label: 'Yonetim',
+    label: 'Icerikler',
     items: [
       {
-        label: 'Icerik Yonetimi',
-        icon: Tv,
+        label: 'Araclar',
+        icon: Wrench,
         children: [
           { to: '/downloads', label: 'Downloader', icon: Download },
+          { to: '/transcode', label: 'Transcode', icon: Sliders },
+          { to: '/transcode-profiles', label: 'Transcode Profiller', icon: SlidersHorizontal },
+          { to: '/playlists', label: 'VOD Channel', icon: ListVideo },
+        ],
+      },
+      {
+        label: 'Medya',
+        icon: Film,
+        children: [
           { to: '/movies', label: 'Movies', icon: Film },
-          { to: '/series', label: 'Series', icon: Tv },
+          { to: '/series', label: 'Series', icon: Clapperboard },
           { to: '/tv-channels', label: 'TV Kanallari', icon: MonitorPlay },
           { to: '/radio', label: 'Radyo', icon: Radio },
+        ],
+      },
+      {
+        label: 'Organizasyon',
+        icon: FolderKanban,
+        children: [
           { to: '/categories', label: 'Kategoriler', icon: FolderKanban },
-          { to: '/transcode', label: 'Transcode', icon: Sliders },
-          { to: '/transcode-profiles', label: 'Transcode Profiller', icon: Sliders },
-          { to: '/playlists', label: 'VOD Channel', icon: ListVideo },
           { to: '/bouquets', label: 'Bouquets', icon: Layers3 },
         ],
       },
+    ],
+  },
+  {
+    label: 'Yonetim',
+    items: [
       { to: '/users', label: 'Kullanicilar', icon: Shield },
       { to: '/admin-users', label: 'Yoneticiler', icon: UserCog },
       { to: '/vpn-clients', label: 'VPN Istemcileri', icon: ShieldCheck },
@@ -64,14 +83,17 @@ const groups = [
   },
 ]
 
-const ICERIK_PATHS = ['/downloads', '/movies', '/series', '/tv-channels', '/radio', '/categories', '/transcode', '/playlists', '/bouquets']
+const ARACLAR_PATHS = ['/downloads', '/transcode', '/transcode-profiles', '/playlists']
+const MEDYA_PATHS = ['/movies', '/series', '/tv-channels', '/radio']
+const ORG_PATHS = ['/categories', '/bouquets']
 
 export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: SidebarProps) {
   const location = useLocation()
   const theme = useBrandingStore((state) => state.theme)
-  const isIcerikActive = ICERIK_PATHS.some((p) => location.pathname.startsWith(p))
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    'Icerik Yonetimi': isIcerikActive,
+    Araclar: ARACLAR_PATHS.some((p) => location.pathname.startsWith(p)),
+    Medya: MEDYA_PATHS.some((p) => location.pathname.startsWith(p)),
+    Organizasyon: ORG_PATHS.some((p) => location.pathname.startsWith(p)),
   })
   const showCollapsed = isDesktop && collapsed
 
@@ -170,19 +192,23 @@ export default function Sidebar({ mobileOpen, collapsed, isDesktop, onClose }: S
                         </button>
                         {isOpen && (
                           <div className="space-y-1 px-3 pb-3">
-                            {(item.children ?? []).map((child) => (
-                              <NavLink
-                                key={child.to}
-                                to={child.to}
-                                onClick={onClose}
-                                className={({ isActive }) => `block rounded-xl px-4 py-2.5 text-sm transition ${isActive ? 'text-white' : 'text-white/65 hover:bg-white/10 hover:text-white'}`}
-                                style={({ isActive }) => ({
-                                  backgroundColor: isActive ? theme.primary_color : 'transparent',
-                                })}
-                              >
-                                {child.label}
-                              </NavLink>
-                            ))}
+                            {(item.children ?? []).map((child) => {
+                              const ChildIcon = child.icon
+                              return (
+                                <NavLink
+                                  key={child.to}
+                                  to={child.to}
+                                  onClick={onClose}
+                                  className={({ isActive }) => `flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm transition ${isActive ? 'text-white' : 'text-white/65 hover:bg-white/10 hover:text-white'}`}
+                                  style={({ isActive }) => ({
+                                    backgroundColor: isActive ? theme.primary_color : 'transparent',
+                                  })}
+                                >
+                                  <ChildIcon size={15} />
+                                  <span>{child.label}</span>
+                                </NavLink>
+                              )
+                            })}
                           </div>
                         )}
                       </div>
