@@ -1,3 +1,4 @@
+import time
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -7,13 +8,16 @@ from app.core.database import get_db
 from app.modules.auth.router import get_current_user_id
 from app.modules.tv import service
 from app.modules.tv.schemas import (
+    ChannelViewerCounts,
     TvChannelBouquetCreate,
     TvChannelCreate,
     TvChannelOut,
     TvChannelServerCreate,
     TvChannelTestResult,
     TvChannelUpdate,
+    ViewerOut,
 )
+from app.modules.tv.viewer_tracker import viewer_tracker
 
 router = APIRouter(prefix="/tv/channels", tags=["tv"], dependencies=[Depends(get_current_user_id)])
 
@@ -90,3 +94,28 @@ def restart_channel(
     db: Session = Depends(get_db),
 ):
     return service.restart_channel(db, channel_id)
+
+
+# ── Viewer Tracking ───────────────────────────────────────────────────────────
+
+@router.get("/viewers/counts", response_model=ChannelViewerCounts)
+def get_viewer_counts():
+    """Tum kanallarin anlık izleyici sayilarini dondurur."""
+    counts = viewer_tracker.get_all_counts()
+    return ChannelViewerCounts(counts=counts)
+
+
+@router.get("/{channel_id}/viewers", response_model=List[ViewerOut])
+def get_channel_viewers(channel_id: int):
+    """Belirli bir kanalin anlık izleyici listesini dondurur."""
+    viewers = viewer_tracker.get_channel_viewers(channel_id)
+    now = time.time()
+    return [
+        ViewerOut(
+            username=v.username,
+            ip_address=v.ip_address,
+            connected_at=v.connected_at,
+            duration_seconds=int(now - v.connected_at),
+        )
+        for v in viewers
+    ]

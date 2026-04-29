@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -110,3 +110,16 @@ class TvChannelTestResult(BaseModel):
     ok: bool
     status_code: Optional[int] = None
     message: str
+
+
+# ── Viewer Tracking ───────────────────────────────────────────────────────────
+
+class ViewerOut(BaseModel):
+    username: str
+    ip_address: str
+    connected_at: float
+    duration_seconds: int
+
+
+class ChannelViewerCounts(BaseModel):
+    counts: Dict[int, int]  # channel_id -> viewer count

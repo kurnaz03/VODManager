@@ -17,6 +17,7 @@ from app.modules.playlist.models import Playlist
 from app.modules.connections import service as conn_svc
 from app.modules.tv.models import TvChannel, TvChannelBouquet
 from app.modules.tv import stream_service as tv_stream
+from app.modules.tv.viewer_tracker import viewer_tracker
 
 from app.core.config import settings
 
@@ -855,6 +856,9 @@ async def serve_tv_channel(
     if channel is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TV kanal bulunamadi")
     _do_checks_and_record(db, user, request, channel_id, "tv", channel.name)
+
+    ip_address = request.client.host if request.client else "unknown"
+    viewer_tracker.track(username, channel_id, ip_address)
 
     # HLS proxy: rewrite m3u8 segments
     rewritten = await tv_stream.get_tv_m3u8_proxied(db, channel_id, username, password)

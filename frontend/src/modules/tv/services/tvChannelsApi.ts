@@ -83,6 +83,17 @@ export interface TvChannelTestResult {
   message: string
 }
 
+export interface ViewerInfo {
+  username: string
+  ip_address: string
+  connected_at: number
+  duration_seconds: number
+}
+
+export interface ChannelViewerCounts {
+  counts: { [channelId: number]: number }
+}
+
 export const tvChannelsApi = {
   async list(categoryId?: number, activeOnly?: boolean): Promise<TvChannel[]> {
     const params: Record<string, string | number | boolean> = {}
@@ -128,6 +139,16 @@ export const tvChannelsApi = {
 
   async restart(id: number): Promise<TvChannel> {
     const r = await api.post<TvChannel>(`/tv/channels/${id}/restart`)
+    return r.data
+  },
+
+  async getViewerCounts(): Promise<ChannelViewerCounts> {
+    const r = await api.get<ChannelViewerCounts>('/tv/channels/viewers/counts')
+    return r.data
+  },
+
+  async getChannelViewers(channelId: number): Promise<ViewerInfo[]> {
+    const r = await api.get<ViewerInfo[]>(`/tv/channels/${channelId}/viewers`)
     return r.data
   },
 }

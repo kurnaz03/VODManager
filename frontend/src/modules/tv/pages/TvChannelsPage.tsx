@@ -15,11 +15,12 @@ import {
   Square,
   StopCircle,
   Trash2,
+  Users,
   X,
   XCircle,
   Zap,
 } from 'lucide-react'
-import { tvChannelsApi, TvChannel, TvChannelCreate, TvChannelUpdate } from '../services/tvChannelsApi'
+import { tvChannelsApi, TvChannel, TvChannelCreate, TvChannelUpdate, ViewerInfo } from '../services/tvChannelsApi'
 import { contentApi, Category } from '../../content/services/contentApi'
 import { serversApi, Server as ServerType } from '../../servers/services/serversApi'
 
@@ -328,6 +329,88 @@ function formatUptime(seconds: number): string {
   return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
 }
 
+// ── Viewers Modal ─────────────────────────────────────────────────────────────
+
+interface ViewersModalProps {
+  channelName: string
+  channelId: number
+  onClose: () => void
+}
+
+function ViewersModal({ channelName, channelId, onClose }: ViewersModalProps) {
+  const viewersQuery = useQuery({
+    queryKey: ['tv-channel-viewers', channelId],
+    queryFn: () => tvChannelsApi.getChannelViewers(channelId),
+    refetchInterval: 5000,
+  })
+
+  const viewers: ViewerInfo[] = viewersQuery.data ?? []
+
+  function formatTs(ts: number): string {
+    return new Date(ts * 1000).toLocaleTimeString()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center gap-2 text-gray-800 font-semibold text-base">
+            <Users size={18} className="text-blue-500" />
+            Kanal İzleyicileri - {channelName}
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 transition">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {viewersQuery.isLoading ? (
+            <div className="flex items-center justify-center py-12 text-gray-400">
+              <RefreshCw size={16} className="animate-spin mr-2" />
+              Yükleniyor...
+            </div>
+          ) : viewers.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
+              Şu an izleyici yok.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  {['Username', 'IP Adresi', 'Bağlanma Zamanı', 'Süre'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {viewers.map((v, i) => (
+                  <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+                    <td className="px-4 py-3 font-medium text-gray-800">{v.username}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{v.ip_address}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatTs(v.connected_at)}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatUptime(v.duration_seconds)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="border-t border-gray-100 px-6 py-3 flex justify-between items-center flex-shrink-0">
+          <span className="text-xs text-gray-400">Her 5 saniyede güncellenir</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-300 bg-white px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+          >
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function TvChannelsPage() {
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
@@ -335,6 +418,7 @@ export default function TvChannelsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [testResult, setTestResult] = useState<{ id: number; ok: boolean; msg: string } | null>(null)
   const [testingId, setTestingId] = useState<number | null>(null)
+  const [viewersChannel, setViewersChannel] = useState<TvChannel | null>(null)
 
   // Filter state
   const [searchText, setSearchText] = useState('')
@@ -354,6 +438,12 @@ export default function TvChannelsPage() {
     queryKey: ['tv-channels'],
     queryFn: () => tvChannelsApi.list(),
     refetchInterval: autoRefresh ? 10000 : false,
+  })
+
+  const viewerCountsQuery = useQuery({
+    queryKey: ['tv-viewer-counts'],
+    queryFn: () => tvChannelsApi.getViewerCounts(),
+    refetchInterval: 10000,
   })
 
   const categoriesQuery = useQuery({
@@ -413,6 +503,7 @@ export default function TvChannelsPage() {
   const categories: Category[] = categoriesQuery.data ?? []
   const servers: ServerType[] = serversQuery.data ?? []
   const bouquets = bouquetsQuery.data ?? []
+  const viewerCounts: { [channelId: number]: number } = viewerCountsQuery.data?.counts ?? {}
 
   // Client-side filtering
   const filtered = useMemo(() => {
@@ -657,7 +748,26 @@ export default function TvChannelsPage() {
                     </td>
 
                     {/* CLIENTS */}
-                    <td className="px-3 py-3 text-center text-xs text-gray-500">0</td>
+                    <td className="px-3 py-3 text-center">
+                      {(() => {
+                        const count = viewerCounts[ch.id] ?? 0
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setViewersChannel(ch)}
+                            title="İzleyicileri göster"
+                            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold cursor-pointer transition ${
+                              count > 0
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200'
+                                : 'bg-gray-100 text-gray-400 border border-gray-200 hover:bg-gray-200'
+                            }`}
+                          >
+                            <Users size={10} />
+                            {count}
+                          </button>
+                        )
+                      })()}
+                    </td>
 
                     {/* UPTIME */}
                     <td className="px-3 py-3">
@@ -861,6 +971,15 @@ export default function TvChannelsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Viewers Modal */}
+      {viewersChannel !== null && (
+        <ViewersModal
+          channelName={viewersChannel.name}
+          channelId={viewersChannel.id}
+          onClose={() => setViewersChannel(null)}
+        />
       )}
     </div>
   )
