@@ -298,3 +298,138 @@ class StreamContentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+# ── Radio Content Extended Schemas (with visual fields) ───────────────────────
+
+VisualTypeLiteral = Literal["video", "image", "none"]
+
+
+class RadioContentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    category_id: int | None = None
+    logo_url: str | None = None
+    stream_url: str | None = None
+    is_public: bool = True
+    visual_url: str | None = None
+    visual_type: VisualTypeLiteral = "none"
+
+
+class RadioContentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    category_id: int | None = None
+    logo_url: str | None = None
+    stream_url: str | None = None
+    is_public: bool | None = None
+    visual_url: str | None = None
+    visual_type: VisualTypeLiteral | None = None
+
+
+class RadioContentResponse(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    category_id: int | None
+    category_name: str | None
+    logo_url: str | None
+    stream_url: str | None
+    is_public: bool
+    visual_url: str | None
+    visual_type: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── Music Track Schemas ───────────────────────────────────────────────────────
+
+class MusicTrackCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    artist: str | None = Field(default=None, max_length=255)
+    duration_seconds: int | None = None
+    file_path: str | None = None
+    stream_url: str | None = None
+    category_id: int | None = None
+    cover_url: str | None = None
+
+
+class MusicTrackUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    artist: str | None = Field(default=None, max_length=255)
+    duration_seconds: int | None = None
+    file_path: str | None = None
+    stream_url: str | None = None
+    category_id: int | None = None
+    cover_url: str | None = None
+
+
+class MusicTrackOut(BaseModel):
+    id: int
+    title: str
+    artist: str | None
+    duration_seconds: int | None
+    file_path: str | None
+    stream_url: str | None
+    category_id: int | None
+    category_name: str | None
+    cover_url: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Music Playlist Schemas ────────────────────────────────────────────────────
+
+class MusicPlaylistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    visual_url: str | None = None
+    visual_type: VisualTypeLiteral = "none"
+    is_active: bool = False
+    server_id: int | None = None
+
+
+class MusicPlaylistUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    visual_url: str | None = None
+    visual_type: VisualTypeLiteral | None = None
+    is_active: bool | None = None
+    server_id: int | None = None
+    ffmpeg_pid: int | None = None
+    stream_url: str | None = None
+    status: str | None = None
+
+
+class MusicPlaylistItemCreate(BaseModel):
+    track_id: int = Field(ge=1)
+    position: int = Field(default=0, ge=0)
+
+
+class MusicPlaylistItemOut(BaseModel):
+    id: int
+    playlist_id: int
+    track_id: int
+    position: int
+    track: MusicTrackOut | None
+
+    model_config = {"from_attributes": True}
+
+
+class MusicPlaylistOut(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    visual_url: str | None
+    visual_type: str | None
+    is_active: bool
+    server_id: int | None
+    ffmpeg_pid: int | None
+    stream_url: str | None
+    status: str
+    started_at: datetime | None
+    created_at: datetime
+    items: list[MusicPlaylistItemOut]
+
+    model_config = {"from_attributes": True}
+

@@ -27,6 +27,17 @@ from app.modules.content.schemas import (
     MovieContentCreate,
     MovieContentResponse,
     MovieContentUpdate,
+    MusicPlaylistCreate,
+    MusicPlaylistItemCreate,
+    MusicPlaylistItemOut,
+    MusicPlaylistOut,
+    MusicPlaylistUpdate,
+    MusicTrackCreate,
+    MusicTrackOut,
+    MusicTrackUpdate,
+    RadioContentCreate,
+    RadioContentResponse,
+    RadioContentUpdate,
     SeasonCreate,
     SeasonResponse,
     SeriesContentCreate,
@@ -256,21 +267,85 @@ def delete_tv(tv_id: int, db: Session = Depends(get_db)):
 
 # ── Radio Content ─────────────────────────────────────────────────────────────
 
-@router.get("/radio", response_model=list[StreamContentResponse], tags=["radio"])
+@router.get("/radio", response_model=list[RadioContentResponse], tags=["radio"])
 def list_radio(category_id: int | None = None, db: Session = Depends(get_db)):
     return service.list_radio_contents(db, category_id)
 
 
-@router.post("/radio", response_model=StreamContentResponse, status_code=status.HTTP_201_CREATED, tags=["radio"])
-def create_radio(payload: StreamContentCreate, db: Session = Depends(get_db)):
+@router.post("/radio", response_model=RadioContentResponse, status_code=status.HTTP_201_CREATED, tags=["radio"])
+def create_radio(payload: RadioContentCreate, db: Session = Depends(get_db)):
     return service.create_radio_content(db, payload)
 
 
-@router.put("/radio/{radio_id}", response_model=StreamContentResponse, tags=["radio"])
-def update_radio(radio_id: int, payload: StreamContentUpdate, db: Session = Depends(get_db)):
+@router.put("/radio/{radio_id}", response_model=RadioContentResponse, tags=["radio"])
+def update_radio(radio_id: int, payload: RadioContentUpdate, db: Session = Depends(get_db)):
     return service.update_radio_content(db, radio_id, payload)
 
 
 @router.delete("/radio/{radio_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["radio"])
 def delete_radio(radio_id: int, db: Session = Depends(get_db)):
     service.delete_radio_content(db, radio_id)
+
+
+# ── Music Tracks ──────────────────────────────────────────────────────────────
+
+@router.get("/music/tracks", response_model=list[MusicTrackOut], tags=["music"])
+def list_music_tracks(category_id: int | None = None, db: Session = Depends(get_db)):
+    return service.list_music_tracks(db, category_id)
+
+
+@router.post("/music/tracks", response_model=MusicTrackOut, status_code=status.HTTP_201_CREATED, tags=["music"])
+def create_music_track(payload: MusicTrackCreate, db: Session = Depends(get_db)):
+    return service.create_music_track(db, payload)
+
+
+@router.put("/music/tracks/{track_id}", response_model=MusicTrackOut, tags=["music"])
+def update_music_track(track_id: int, payload: MusicTrackUpdate, db: Session = Depends(get_db)):
+    return service.update_music_track(db, track_id, payload)
+
+
+@router.delete("/music/tracks/{track_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["music"])
+def delete_music_track(track_id: int, db: Session = Depends(get_db)):
+    service.delete_music_track(db, track_id)
+
+
+# ── Music Playlists ───────────────────────────────────────────────────────────
+
+@router.get("/music/playlists", response_model=list[MusicPlaylistOut], tags=["music"])
+def list_music_playlists(db: Session = Depends(get_db)):
+    return service.list_music_playlists(db)
+
+
+@router.post("/music/playlists", response_model=MusicPlaylistOut, status_code=status.HTTP_201_CREATED, tags=["music"])
+def create_music_playlist(payload: MusicPlaylistCreate, db: Session = Depends(get_db)):
+    return service.create_music_playlist(db, payload)
+
+
+@router.get("/music/playlists/{playlist_id}", response_model=MusicPlaylistOut, tags=["music"])
+def get_music_playlist(playlist_id: int, db: Session = Depends(get_db)):
+    return service.get_music_playlist(db, playlist_id)
+
+
+@router.put("/music/playlists/{playlist_id}", response_model=MusicPlaylistOut, tags=["music"])
+def update_music_playlist(playlist_id: int, payload: MusicPlaylistUpdate, db: Session = Depends(get_db)):
+    return service.update_music_playlist(db, playlist_id, payload)
+
+
+@router.delete("/music/playlists/{playlist_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["music"])
+def delete_music_playlist(playlist_id: int, db: Session = Depends(get_db)):
+    service.delete_music_playlist(db, playlist_id)
+
+
+@router.post("/music/playlists/{playlist_id}/items", response_model=MusicPlaylistItemOut, status_code=status.HTTP_201_CREATED, tags=["music"])
+def add_playlist_item(playlist_id: int, payload: MusicPlaylistItemCreate, db: Session = Depends(get_db)):
+    return service.add_playlist_item(db, playlist_id, payload)
+
+
+@router.delete("/music/playlists/{playlist_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["music"])
+def remove_playlist_item(playlist_id: int, item_id: int, db: Session = Depends(get_db)):
+    service.remove_playlist_item(db, playlist_id, item_id)
+
+
+@router.put("/music/playlists/{playlist_id}/items/reorder", response_model=MusicPlaylistOut, tags=["music"])
+def reorder_playlist_items(playlist_id: int, ordered_ids: list[int], db: Session = Depends(get_db)):
+    return service.reorder_playlist_items(db, playlist_id, ordered_ids)

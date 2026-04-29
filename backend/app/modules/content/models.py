@@ -214,7 +214,65 @@ class RadioContent(Base):
     logo_url = Column(String(1000), nullable=True)
     stream_url = Column(Text, nullable=True)
     is_public = Column(Boolean, nullable=False, default=True, index=True)
+    visual_url = Column(String(1000), nullable=True)
+    visual_type = Column(String(20), nullable=True, default="none")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     category = relationship("RadioCategory")
+
+
+# ── Music Tracks ──────────────────────────────────────────────────────────────
+
+class MusicTrack(Base):
+    __tablename__ = "music_tracks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False, index=True)
+    artist = Column(String(255), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    file_path = Column(Text, nullable=True)
+    stream_url = Column(Text, nullable=True)
+    category_id = Column(Integer, ForeignKey("radio_categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    cover_url = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    category = relationship("RadioCategory")
+
+
+# ── Music Playlists ───────────────────────────────────────────────────────────
+
+class MusicPlaylist(Base):
+    __tablename__ = "music_playlists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    visual_url = Column(String(1000), nullable=True)
+    visual_type = Column(String(20), nullable=True, default="none")
+    is_active = Column(Boolean, nullable=False, default=False)
+    server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True, index=True)
+    ffmpeg_pid = Column(Integer, nullable=True)
+    stream_url = Column(String(1000), nullable=True)
+    status = Column(String(20), nullable=False, default="stopped")
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    items = relationship(
+        "MusicPlaylistItem",
+        back_populates="playlist",
+        cascade="all, delete-orphan",
+        order_by="MusicPlaylistItem.position.asc(), MusicPlaylistItem.id.asc()",
+    )
+
+
+class MusicPlaylistItem(Base):
+    __tablename__ = "music_playlist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    playlist_id = Column(Integer, ForeignKey("music_playlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    track_id = Column(Integer, ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+
+    playlist = relationship("MusicPlaylist", back_populates="items")
+    track = relationship("MusicTrack")

@@ -16,6 +16,9 @@ from app.modules.content.models import (
     BouquetType,
     MovieCategory,
     MovieContent,
+    MusicPlaylist,
+    MusicPlaylistItem,
+    MusicTrack,
     RadioCategory,
     RadioContent,
     SeriesCategory,
@@ -38,6 +41,13 @@ from app.modules.content.schemas import (
     EpisodeUpdate,
     MovieContentCreate,
     MovieContentUpdate,
+    MusicPlaylistCreate,
+    MusicPlaylistItemCreate,
+    MusicPlaylistUpdate,
+    MusicTrackCreate,
+    MusicTrackUpdate,
+    RadioContentCreate,
+    RadioContentUpdate,
     SeasonCreate,
     SeriesContentCreate,
     SeriesContentUpdate,
@@ -792,6 +802,8 @@ def _serialize_radio(item: RadioContent) -> dict[str, Any]:
         "logo_url": item.logo_url,
         "stream_url": item.stream_url,
         "is_public": item.is_public,
+        "visual_url": item.visual_url,
+        "visual_type": item.visual_type,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
@@ -804,7 +816,7 @@ def list_radio_contents(db: Session, category_id: int | None = None) -> list[dic
     return [_serialize_radio(item) for item in query.all()]
 
 
-def create_radio_content(db: Session, payload: StreamContentCreate) -> dict[str, Any]:
+def create_radio_content(db: Session, payload: RadioContentCreate) -> dict[str, Any]:
     item = RadioContent(**payload.model_dump())
     db.add(item)
     db.commit()
@@ -812,7 +824,7 @@ def create_radio_content(db: Session, payload: StreamContentCreate) -> dict[str,
     return _serialize_radio(db.query(RadioContent).options(joinedload(RadioContent.category)).filter(RadioContent.id == item.id).first())
 
 
-def update_radio_content(db: Session, radio_id: int, payload: StreamContentUpdate) -> dict[str, Any]:
+def update_radio_content(db: Session, radio_id: int, payload: RadioContentUpdate) -> dict[str, Any]:
     item = db.query(RadioContent).options(joinedload(RadioContent.category)).filter(RadioContent.id == radio_id).first()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Radyo icerigi bulunamadi")
@@ -831,3 +843,195 @@ def delete_radio_content(db: Session, radio_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Radyo icerigi bulunamadi")
     db.delete(item)
     db.commit()
+
+
+# ── Music Track Service ───────────────────────────────────────────────────────
+
+def _serialize_track(item: MusicTrack) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "title": item.title,
+        "artist": item.artist,
+        "duration_seconds": item.duration_seconds,
+        "file_path": item.file_path,
+        "stream_url": item.stream_url,
+        "category_id": item.category_id,
+        "category_name": item.category.name if item.category else None,
+        "cover_url": item.cover_url,
+        "created_at": item.created_at,
+    }
+
+
+def list_music_tracks(db: Session, category_id: int | None = None) -> list[dict[str, Any]]:
+    query = db.query(MusicTrack).options(joinedload(MusicTrack.category)).order_by(MusicTrack.created_at.desc())
+    if category_id is not None:
+        query = query.filter(MusicTrack.category_id == category_id)
+    return [_serialize_track(item) for item in query.all()]
+
+
+def create_music_track(db: Session, payload: MusicTrackCreate) -> dict[str, Any]:
+    item = MusicTrack(**payload.model_dump())
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _serialize_track(db.query(MusicTrack).options(joinedload(MusicTrack.category)).filter(MusicTrack.id == item.id).first())
+
+
+def update_music_track(db: Session, track_id: int, payload: MusicTrackUpdate) -> dict[str, Any]:
+    item = db.query(MusicTrack).options(joinedload(MusicTrack.category)).filter(MusicTrack.id == track_id).first()
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik parcasi bulunamadi")
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(item, key, value)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _serialize_track(db.query(MusicTrack).options(joinedload(MusicTrack.category)).filter(MusicTrack.id == track_id).first())
+
+
+def delete_music_track(db: Session, track_id: int) -> None:
+    item = db.query(MusicTrack).filter(MusicTrack.id == track_id).first()
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik parcasi bulunamadi")
+    db.delete(item)
+    db.commit()
+
+
+# ── Music Playlist Service ────────────────────────────────────────────────────
+
+def _serialize_playlist_item(pi: MusicPlaylistItem) -> dict[str, Any]:
+    track = pi.track
+    return {
+        "id": pi.id,
+        "playlist_id": pi.playlist_id,
+        "track_id": pi.track_id,
+        "position": pi.position,
+        "track": _serialize_track(track) if track else None,
+    }
+
+
+def _serialize_playlist(pl: MusicPlaylist) -> dict[str, Any]:
+    return {
+        "id": pl.id,
+        "name": pl.name,
+        "description": pl.description,
+        "visual_url": pl.visual_url,
+        "visual_type": pl.visual_type,
+        "is_active": pl.is_active,
+        "server_id": pl.server_id,
+        "ffmpeg_pid": pl.ffmpeg_pid,
+        "stream_url": pl.stream_url,
+        "status": pl.status,
+        "started_at": pl.started_at,
+        "created_at": pl.created_at,
+        "items": [_serialize_playlist_item(pi) for pi in pl.items],
+    }
+
+
+def _get_playlist(db: Session, playlist_id: int) -> MusicPlaylist:
+    pl = (
+        db.query(MusicPlaylist)
+        .options(
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)
+        )
+        .filter(MusicPlaylist.id == playlist_id)
+        .first()
+    )
+    if pl is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik playlist bulunamadi")
+    return pl
+
+
+def list_music_playlists(db: Session) -> list[dict[str, Any]]:
+    playlists = (
+        db.query(MusicPlaylist)
+        .options(
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)
+        )
+        .order_by(MusicPlaylist.created_at.desc())
+        .all()
+    )
+    return [_serialize_playlist(pl) for pl in playlists]
+
+
+def get_music_playlist(db: Session, playlist_id: int) -> dict[str, Any]:
+    return _serialize_playlist(_get_playlist(db, playlist_id))
+
+
+def create_music_playlist(db: Session, payload: MusicPlaylistCreate) -> dict[str, Any]:
+    pl = MusicPlaylist(**payload.model_dump())
+    db.add(pl)
+    db.commit()
+    db.refresh(pl)
+    return _serialize_playlist(_get_playlist(db, pl.id))
+
+
+def update_music_playlist(db: Session, playlist_id: int, payload: MusicPlaylistUpdate) -> dict[str, Any]:
+    pl = db.query(MusicPlaylist).filter(MusicPlaylist.id == playlist_id).first()
+    if pl is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik playlist bulunamadi")
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(pl, key, value)
+    db.add(pl)
+    db.commit()
+    db.refresh(pl)
+    return _serialize_playlist(_get_playlist(db, playlist_id))
+
+
+def delete_music_playlist(db: Session, playlist_id: int) -> None:
+    pl = db.query(MusicPlaylist).filter(MusicPlaylist.id == playlist_id).first()
+    if pl is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik playlist bulunamadi")
+    db.delete(pl)
+    db.commit()
+
+
+def add_playlist_item(db: Session, playlist_id: int, payload: MusicPlaylistItemCreate) -> dict[str, Any]:
+    _get_playlist(db, playlist_id)
+    track = db.query(MusicTrack).filter(MusicTrack.id == payload.track_id).first()
+    if track is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik parcasi bulunamadi")
+    existing = db.query(MusicPlaylistItem).filter(
+        MusicPlaylistItem.playlist_id == playlist_id,
+        MusicPlaylistItem.track_id == payload.track_id,
+    ).first()
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bu parca zaten playlist icinde mevcut")
+    if payload.position == 0:
+        max_pos = db.query(func.max(MusicPlaylistItem.position)).filter(MusicPlaylistItem.playlist_id == playlist_id).scalar() or 0
+        position = max_pos + 1
+    else:
+        position = payload.position
+    pi = MusicPlaylistItem(playlist_id=playlist_id, track_id=payload.track_id, position=position)
+    db.add(pi)
+    db.commit()
+    db.refresh(pi)
+    pi_loaded = db.query(MusicPlaylistItem).options(joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)).filter(MusicPlaylistItem.id == pi.id).first()
+    return _serialize_playlist_item(pi_loaded)
+
+
+def remove_playlist_item(db: Session, playlist_id: int, item_id: int) -> None:
+    pi = db.query(MusicPlaylistItem).filter(
+        MusicPlaylistItem.id == item_id,
+        MusicPlaylistItem.playlist_id == playlist_id,
+    ).first()
+    if pi is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist ögesi bulunamadi")
+    db.delete(pi)
+    db.commit()
+
+
+def reorder_playlist_items(db: Session, playlist_id: int, ordered_ids: list[int]) -> dict[str, Any]:
+    _get_playlist(db, playlist_id)
+    items = db.query(MusicPlaylistItem).filter(
+        MusicPlaylistItem.playlist_id == playlist_id,
+        MusicPlaylistItem.id.in_(ordered_ids),
+    ).all()
+    item_map = {i.id: i for i in items}
+    for pos, item_id in enumerate(ordered_ids, start=1):
+        if item_id in item_map:
+            item_map[item_id].position = pos
+    db.commit()
+    return _serialize_playlist(_get_playlist(db, playlist_id))
