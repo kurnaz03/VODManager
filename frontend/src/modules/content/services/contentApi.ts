@@ -486,23 +486,23 @@ export interface YoutubeDownloadPayload {
 export const musicApi = {
   download: {
     async youtube(payload: YoutubeDownloadPayload) {
-      const r = await api.post<MusicDownloadTask>('/content/music/download-youtube', payload)
+      const r = await api.post<MusicDownloadTask>('/music/download-youtube', payload)
       return r.data
     },
     async status(taskId: string) {
-      const r = await api.get<MusicDownloadTask>(`/content/music/download-status/${taskId}`)
+      const r = await api.get<MusicDownloadTask>(`/music/download-status/${taskId}`)
       return r.data
     },
   },
   upload: {
     async file(formData: FormData) {
-      const r = await api.post<MusicTrack>('/content/music/upload-file', formData, {
+      const r = await api.post<MusicTrack>('/music/upload-file', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       return r.data
     },
     async visual(formData: FormData) {
-      const r = await api.post<{ url: string }>('/content/upload-visual', formData, {
+      const r = await api.post<{ url: string }>('/upload-visual', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       return r.data
