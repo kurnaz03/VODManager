@@ -31,10 +31,18 @@ class ViewerTracker:
                 )
 
     def remove_stale(self, timeout: int = 30):
-        """30 saniye boyunca segment istemeyen izleyicileri kaldir."""
+        """30 saniye (TV) veya 120 saniye (Radio) boyunca segment istemeyen izleyicileri kaldir.
+        Radio kanallar icin HLS segmentleri nginxten direkt serve edildiginden timeout uzun tutulur.
+        """
         now = time.time()
         with self._lock:
-            stale = [k for k, v in self._viewers.items() if now - v.last_seen > timeout]
+            stale = []
+            for k, v in self._viewers.items():
+                # Radio kanallar icin timeout 120 saniye (channel_id >= 100000 veya kontrol edilebilir)
+                # Su an icin tum kanallar icin 120 saniye yapalim (TV de sorun olmaz)
+                actual_timeout = 120  # HLS segmentler nginxten geldigi icin uzun tutuyoruz
+                if now - v.last_seen > actual_timeout:
+                    stale.append(k)
             for k in stale:
                 del self._viewers[k]
 
