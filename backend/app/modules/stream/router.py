@@ -22,6 +22,8 @@ from app.modules.tv.viewer_tracker import viewer_tracker
 from app.core.config import settings
 from app.modules.content.models import MusicPlaylist, RadioContent
 
+from app.modules.servers.models import Server, ServerType
+
 router = APIRouter()
 
 # Module-level async HTTP client for connection pooling
@@ -30,7 +32,20 @@ _http_client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
 HLS_BASE_DIR = "/var/www/vod-manager/shared/hls"
 
 
-def _server_host() -> str:
+def _server_host(db: Session | None = None) -> str:
+    """Return server host for M3U/stream URLs.
+    
+    Priority:
+    1. Main server's domain_name if set
+    2. settings.MAIN_SERVER_IP as fallback
+    """
+    if db is not None:
+        try:
+            main_server = db.query(Server).filter(Server.server_type == ServerType.main).first()
+            if main_server and main_server.domain_name:
+                return main_server.domain_name
+        except Exception:
+            pass
     return settings.MAIN_SERVER_IP
 
 
@@ -130,10 +145,10 @@ def _build_user_info(user: IptvUser) -> dict:
     }
 
 
-def _build_server_info() -> dict:
+def _build_server_info(db: Session | None = None) -> dict:
     now = datetime.now()
     return {
-        "url": _server_host(),
+        "url": _server_host(db),
         "port": str(_server_port()),
         "https_port": "443",
         "server_protocol": "http",
@@ -164,7 +179,7 @@ def player_api(
     if not action:
         return JSONResponse({
             "user_info": _build_user_info(user),
-            "server_info": _build_server_info(),
+            "server_info": _build_server_info(db),
         })
 
     # ── Categories ────────────────────────────────────────────────────────────
@@ -470,7 +485,7 @@ def panel_api(
 
     return JSONResponse({
         "user_info": _build_user_info(user),
-        "server_info": _build_server_info(),
+        "server_info": _build_server_info(db),
         "available_channels": available_channels,
     })
 
@@ -484,7 +499,7 @@ def get_m3u_plus(
     db: Session = Depends(get_db),
 ):
     user = _auth_iptv_user(db, username, password)
-    base = f"http://{_server_host()}:{_server_port()}"
+    base = f"http://{_server_host(db)}:{_server_port()}"
     lines = ["#EXTM3U"]
 
     for ub in (user.bouquets or []):
@@ -718,7 +733,7 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
         if os.path.isfile(hls_path):
             with open(hls_path, "r") as f:
                 m3u8_content = f.read()
-            hls_base = f"http://{_server_host()}:{_server_port()}/hls/{playlist.id}/"
+            hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/{playlist.id}/"
             rewritten_lines = []
             for line in m3u8_content.splitlines():
                 if line.strip() and not line.startswith("#"):
@@ -740,7 +755,7 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
                 raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LB stream alinamadi")
 
             # Relative segment path'lerini /hls-proxy/ uzerinden rewrite et
-            proxy_base = f"http://{_server_host()}:{_server_port()}/hls-proxy/{playlist.id}/"
+            proxy_base = f"http://{_server_host(db)}:{_server_port()}/hls-proxy/{playlist.id}/"
             lines = []
             for line in resp.text.splitlines():
                 stripped = line.strip()
@@ -950,7 +965,7 @@ async def serve_radio_music_playlist(
     if os.path.isfile(hls_path):
         with open(hls_path, "r") as f:
             m3u8_content = f.read()
-        hls_base = f"http://{_server_host()}:{_server_port()}/hls/music_{playlist_id}/"
+        hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/music_{playlist_id}/"
         rewritten_lines = []
         for line in m3u8_content.splitlines():
             if line.strip() and not line.startswith("#"):
@@ -1008,7 +1023,7 @@ async def serve_radio_channel(
     if os.path.isfile(hls_path):
         with open(hls_path, "r") as f:
             m3u8_content = f.read()
-        hls_base = f"http://{_server_host()}:{_server_port()}/hls/radio_{radio_id}/"
+        hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/radio_{radio_id}/"
         rewritten_lines = []
         for line in m3u8_content.splitlines():
             if line.strip() and not line.startswith("#"):
