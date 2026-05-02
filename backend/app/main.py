@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.database import engine, SessionLocal, Base
+from app.core.middleware import MaintenanceModeMiddleware
 from app.modules.users.models import (  # noqa: F401 - ensures tables are registered
     User, Role, UserRoleAssignment, RefreshToken, SystemSetting, ActivityLog
 )
@@ -26,6 +27,7 @@ from app.modules.iptv_users.models import IptvUser, UserBouquet  # noqa: F401
 from app.modules.connections.models import UserConnection, UserWatchHistory  # noqa: F401
 from app.modules.openvpn.models import VpnClient, VpnServerConfig  # noqa: F401
 from app.modules.tv.models import TvChannel, TvChannelServer, TvChannelBouquet  # noqa: F401
+from app.modules.backups.models import Backup  # noqa: F401
 from app.modules.roles.seed import seed_roles
 from app.api.v1.router import api_router
 from app.modules.stream.router import router as stream_router
@@ -66,6 +68,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.add_middleware(MaintenanceModeMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,

@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { Bell, ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, Search, UserCircle2 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import MaintenanceBanner from './MaintenanceBanner'
 import { useAuthStore } from '../../store/authStore'
 import api from '../../utils/api'
 import { useBrandingStore } from '../../store/brandingStore'
@@ -35,6 +36,7 @@ export default function DashboardLayout({ children }: Props) {
       downloads: 'Downloader',
       users: 'Kullanicilar',
       settings: 'Ayarlar',
+      backups: 'Yedekler',
     }
     const parts = location.pathname.split('/').filter(Boolean)
     return parts.map((part, index) => ({
@@ -90,6 +92,7 @@ export default function DashboardLayout({ children }: Props) {
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
+          <MaintenanceBanner />
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 shadow-sm backdrop-blur sm:px-6 lg:px-8">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-start gap-3">

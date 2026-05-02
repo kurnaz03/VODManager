@@ -12,6 +12,7 @@ from app.modules.iptv_users.router import router as iptv_users_router
 from app.modules.openvpn.router import router as openvpn_router
 from app.modules.tv.router import router as tv_router
 from app.modules.admin.update_router import router as update_router
+from app.modules.backups.router import router as backups_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -29,3 +30,4 @@ api_router.include_router(iptv_users_router)
 api_router.include_router(openvpn_router)
 api_router.include_router(tv_router)
 api_router.include_router(update_router)
+api_router.include_router(backups_router)

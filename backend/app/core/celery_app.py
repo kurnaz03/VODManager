@@ -27,5 +27,9 @@ celery_app.conf.beat_schedule = {
         "task": "app.modules.admin.tasks.auto_update_check",
         "schedule": crontab(hour=4, minute=0),
     },
+    "daily-auto-backup": {
+        "task": "app.modules.backups.tasks.scheduled_auto_backup",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
-celery_app.autodiscover_tasks(["app.modules.servers", "app.modules.settings", "app.modules.downloads", "app.modules.transcode", "app.modules.admin", "app.modules.content"])
+celery_app.autodiscover_tasks(["app.modules.servers", "app.modules.settings", "app.modules.downloads", "app.modules.transcode", "app.modules.admin", "app.modules.content", "app.modules.backups"])

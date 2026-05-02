@@ -83,5 +83,22 @@ class Settings(BaseSettings):
     def movies_uploads_path(self) -> Path:
         return self.shared_storage_path / "uploads" / "movies"
 
+    # ── Backup ──────────────────────────────────────────────────────────────
+    BACKUP_DIR: str = "/var/backups/vod-manager/user-backups"
+    UPLOADS_DIR: str = "/var/www/vod-manager/shared/uploads"
+    MAX_MANUAL_BACKUPS: int = 5
+    MAX_AUTO_BACKUPS: int = 5
+    PRE_RESTORE_RETENTION_DAYS: int = 30
+    BACKUP_MIN_DISK_FREE_GB: float = 5.0
+    RATE_LIMIT_RESTORE: str = "1/hour"
+
+    @property
+    def backup_dir_path(self) -> Path:
+        return Path(self.BACKUP_DIR)
+
+    @property
+    def uploads_dir_path(self) -> Path:
+        return Path(self.UPLOADS_DIR)
+
 
 settings = Settings()
