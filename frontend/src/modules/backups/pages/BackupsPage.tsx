@@ -374,7 +374,7 @@ export default function BackupsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Yedekler</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Veritabani ve yuklemeler yedeklerini yonetin
+            Veritabani yedeklerini yonetin
           </p>
         </div>
         <button

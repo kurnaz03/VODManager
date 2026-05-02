@@ -78,7 +78,7 @@ def _delete_backup_file(backup) -> None:
 def create_backup_task(self, backup_id: str) -> dict:
     from app.core.database import SessionLocal
     from app.modules.backups.models import Backup, BackupStatus
-    from app.modules.backups.storage import backup_path, staging_dir, uploads_dir, check_disk_space
+    from app.modules.backups.storage import backup_path, staging_dir, check_disk_space
 
     db = SessionLocal()
     backup_uuid = uuid.UUID(backup_id)
@@ -102,26 +102,20 @@ def create_backup_task(self, backup_id: str) -> dict:
         # pg_dump → db.sql.gz
         db_dump_path = staging / "db.sql.gz"
         _pg_dump(db_dump_path)
-        record.progress_percent = 40
+        record.progress_percent = 70
         db.commit()
 
-        # uploads → uploads.tar.gz
-        uploads_archive = staging / "uploads.tar.gz"
-        _tar_uploads(uploads_archive, uploads_dir())
-        record.progress_percent = 80
-        db.commit()
-
-        # manifest.json
+        # manifest.json (uploads_included: false - scope changed to DB-only)
         manifest = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "app_version": settings.APP_VERSION,
             "db_dump_size_bytes": db_dump_path.stat().st_size,
-            "uploads_archive_size_bytes": uploads_archive.stat().st_size,
+            "uploads_included": False,
             "backup_type": record.backup_type.value,
             "backup_id": str(record.id),
         }
         (staging / "manifest.json").write_text(json.dumps(manifest, indent=2))
-        record.progress_percent = 90
+        record.progress_percent = 80
         db.commit()
 
         # pack staging → final.tar.gz (atomic)
@@ -183,7 +177,7 @@ def restore_backup_task(self, snap_id: str, target_backup_id: str) -> dict:
     from app.core.database import SessionLocal
     from app.modules.backups.models import Backup, BackupStatus
     from app.modules.backups.service import set_maintenance_mode
-    from app.modules.backups.storage import backup_path, staging_dir, uploads_dir
+    from app.modules.backups.storage import backup_path, staging_dir
 
     db = SessionLocal()
     snap_uuid = uuid.UUID(snap_id)
@@ -205,10 +199,6 @@ def restore_backup_task(self, snap_id: str, target_backup_id: str) -> dict:
         stg.mkdir(parents=True, exist_ok=True)
 
         _pg_dump(stg / "db.sql.gz")
-        snap.progress_percent = 15
-        db.commit()
-
-        _tar_uploads(stg / "uploads.tar.gz", uploads_dir())
         snap.progress_percent = 25
         db.commit()
 
@@ -248,7 +238,7 @@ def restore_backup_task(self, snap_id: str, target_backup_id: str) -> dict:
         snap.progress_percent = 40
         db.commit()
 
-        # ── Phase 3: DB restore (40→70) ───────────────────────────────────
+        # ── Phase 3: DB restore (40→90) ───────────────────────────────────
         user, password, host, port, dbname = _parse_db_url()
         env = os.environ.copy()
         env["PGPASSWORD"] = password
@@ -302,34 +292,15 @@ def restore_backup_task(self, snap_id: str, target_backup_id: str) -> dict:
         if psql.returncode != 0:
             raise RuntimeError(f"psql restore basarisiz: {psql_err.decode(errors='replace')[:1000]}")
 
-        snap.progress_percent = 70
+        snap.progress_percent = 90
         db.commit()
 
-        # ── Phase 4: uploads restore (70→90) ──────────────────────────────
+        # Backward compat: eski backup'larda uploads.tar.gz olabilir - skip et
         uploads_archive = extract_dir / "uploads.tar.gz"
-        target_uploads = uploads_dir()
-        uploads_bak = target_uploads.parent / (target_uploads.name + ".bak")
+        if uploads_archive.exists():
+            logger.info("uploads.tar.gz mevcut ama atlanıyor (scope DB-only olarak degistirildi)")
 
-        if target_uploads.exists():
-            if uploads_bak.exists():
-                shutil.rmtree(str(uploads_bak))
-            target_uploads.rename(uploads_bak)
-
-        target_uploads.mkdir(parents=True, exist_ok=True)
-
-        with tarfile.open(str(uploads_archive), "r:gz") as tar:
-            for member in tar.getmembers():
-                member.name = member.name.removeprefix("uploads/").lstrip("/")
-                if member.name:
-                    tar.extract(member, str(target_uploads))
-
-        if uploads_bak.exists():
-            shutil.rmtree(str(uploads_bak), ignore_errors=True)
-
-        snap.progress_percent = 95
-        db.commit()
-
-        # ── Phase 5: finalize (95→100) ────────────────────────────────────
+        # ── Phase 4: finalize (90→100) ────────────────────────────────────
         shutil.rmtree(str(extract_dir), ignore_errors=True)
         extract_dir = None
 
