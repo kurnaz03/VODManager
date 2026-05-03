@@ -498,7 +498,6 @@ def _build_download_command(item: DownloadQueue, max_download_speed_mbps: float)
         "--progress",
         "--no-warnings",
         "--restrict-filenames",
-        "--remote-components", "ejs:github",
         "--merge-output-format",
         "mp4",
         "--ppa", "Merger+ffmpeg_o:-movflags +faststart",
