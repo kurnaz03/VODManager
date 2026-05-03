@@ -61,8 +61,8 @@ router = APIRouter(dependencies=[Depends(get_current_user_id)])
 # ── Categories ────────────────────────────────────────────────────────────────
 
 @router.get("/categories/{category_type}", response_model=list[CategoryResponse], tags=["categories"])
-def list_categories(category_type: str, db: Session = Depends(get_db)):
-    return service.list_categories(db, category_type)
+def list_categories(category_type: str, include_hidden: bool = False, db: Session = Depends(get_db)):
+    return service.list_categories(db, category_type, include_hidden=include_hidden)
 
 
 @router.post("/categories/{category_type}", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED, tags=["categories"])

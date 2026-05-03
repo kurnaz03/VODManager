@@ -275,8 +275,8 @@ export default function TranscodeJobsPage() {
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const categoriesQ = useQuery({
-    queryKey: ['categories', 'movies'],
-    queryFn: () => contentApi.listCategories('movies'),
+    queryKey: ['categories', 'movies', 'all'],
+    queryFn: () => contentApi.listCategories('movies', true),
   })
 
   const moviesQ = useQuery({

@@ -86,8 +86,9 @@ export interface BouquetPayload {
 }
 
 export const contentApi = {
-  async listCategories(categoryType: CategoryType) {
-    const response = await api.get<Category[]>(`/categories/${categoryType}`)
+  async listCategories(categoryType: CategoryType, includeHidden = false) {
+    const params = includeHidden ? { include_hidden: true } : {}
+    const response = await api.get<Category[]>(`/categories/${categoryType}`, { params })
     return response.data
   },
 

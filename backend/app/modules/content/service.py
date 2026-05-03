@@ -84,14 +84,12 @@ def _category_to_dict(category: Any) -> dict[str, Any]:
     }
 
 
-def list_categories(db: Session, category_type: str) -> list[dict[str, Any]]:
+def list_categories(db: Session, category_type: str, include_hidden: bool = False) -> list[dict[str, Any]]:
     model = _get_category_model(category_type)
-    categories = (
-        db.query(model)
-        .filter(model.is_hidden == False)  # noqa: E712
-        .order_by(model.sort_order.asc(), model.name.asc())
-        .all()
-    )
+    query = db.query(model)
+    if not include_hidden:
+        query = query.filter(model.is_hidden == False)  # noqa: E712
+    categories = query.order_by(model.sort_order.asc(), model.name.asc()).all()
     return [_category_to_dict(category) for category in categories]
 
 
