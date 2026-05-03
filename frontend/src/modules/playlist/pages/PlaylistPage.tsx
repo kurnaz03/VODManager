@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowDown,
-  ArrowUp,
   Calendar,
   ChevronLeft,
   Clock,
@@ -10,6 +8,7 @@ import {
   Download,
   ExternalLink,
   Film,
+  GripVertical,
   ListVideo,
   Pencil,
   Play,
@@ -20,9 +19,145 @@ import {
   Timer,
   X,
 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { playlistApi, EpgProgram, Playlist, PlaylistItem } from '../services/playlistApi'
 import { transcodeApi } from '../../transcode/services/transcodeApi'
 import { serversApi } from '../../servers/services/serversApi'
+
+// ── Sortable Playlist Item ────────────────────────────────────────────────────
+
+function SortablePlaylistItem({
+  item,
+  idx,
+  isCurrent,
+  progressInItem,
+  isPlaying,
+  isDragging,
+  onRemove,
+}: {
+  item: PlaylistItem
+  idx: number
+  isCurrent: boolean
+  progressInItem: number
+  isPlaying: boolean
+  isDragging: boolean
+  onRemove: (id: number) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSelfDragging,
+  } = useSortable({ id: item.id, disabled: isPlaying })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isSelfDragging ? 0.3 : 1,
+    zIndex: isSelfDragging ? 10 : undefined,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2.5 px-3 py-2.5 border-b border-slate-100 transition ${
+        isCurrent
+          ? 'bg-emerald-50 border-l-[3px] border-l-emerald-500'
+          : isDragging
+          ? 'bg-blue-50 shadow-lg rounded-xl'
+          : 'hover:bg-slate-50'
+      }`}
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        disabled={isPlaying}
+        className={`shrink-0 rounded p-0.5 transition ${
+          isPlaying
+            ? 'cursor-not-allowed opacity-20'
+            : 'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+        }`}
+        tabIndex={-1}
+        title={isPlaying ? 'Yayin aktifken sira degistirilemez' : 'Siralamak icin surukle'}
+      >
+        <GripVertical size={14} />
+      </button>
+
+      {/* Index / play indicator */}
+      <span className={`w-5 shrink-0 text-center text-xs font-mono ${isCurrent ? 'text-emerald-600' : 'text-slate-400'}`}>
+        {isCurrent ? '▶' : idx + 1}
+      </span>
+
+      {/* Small poster */}
+      {item.tmdb_poster_url ? (
+        <img
+          src={item.tmdb_poster_url}
+          alt={item.title}
+          className="h-[54px] w-[36px] rounded-md object-cover shrink-0 shadow-sm"
+          onError={(e) => {
+            const el = e.target as HTMLImageElement
+            el.style.display = 'none'
+          }}
+        />
+      ) : (
+        <div className="h-[54px] w-[36px] rounded-md bg-slate-100 shrink-0 flex items-center justify-center">
+          <Film size={14} className="text-slate-400" />
+        </div>
+      )}
+
+      {/* Title + duration + progress */}
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-xs font-medium leading-snug ${isCurrent ? 'text-emerald-700' : 'text-slate-700'}`}>
+          {item.tmdb_title || item.title}
+        </div>
+        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+          {formatDuration(item.duration_seconds)}
+        </div>
+        {isCurrent && (
+          <div className="mt-1.5 h-0.5 w-full rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.min(progressInItem * 100, 100)}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Remove button */}
+      <div className="flex items-center shrink-0">
+        <button
+          onClick={() => onRemove(item.id)}
+          disabled={isPlaying}
+          className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-20 transition"
+          title="Kaldir"
+        >
+          <X size={11} />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -886,12 +1021,25 @@ function PlaylistDetailView({
     setPendingItems(currentPlaylist.items)
   }
 
-  function moveItem(idx: number, dir: -1 | 1) {
-    const newItems = [...pendingItems]
-    const target = idx + dir
-    if (target < 0 || target >= newItems.length) return
-    ;[newItems[idx], newItems[target]] = [newItems[target], newItems[idx]]
-    setPendingItems(newItems)
+  const [activeDragId, setActiveDragId] = useState<number | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(event.active.id as number)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = pendingItems.findIndex((i) => i.id === active.id)
+    const newIndex = pendingItems.findIndex((i) => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    setPendingItems(arrayMove(pendingItems, oldIndex, newIndex))
     setDirty(true)
   }
 
@@ -1061,89 +1209,68 @@ function PlaylistDetailView({
                 </button>
               </div>
             ) : (
-              <div>
-                {pendingItems.map((item, idx) => {
-                  const isCurrent = isPlaying && currentIdx === idx
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 border-b border-slate-100 transition ${
-                        isCurrent
-                          ? 'bg-emerald-50 border-l-[3px] border-l-emerald-500'
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      {/* Index / play indicator */}
-                      <span className={`w-5 shrink-0 text-center text-xs font-mono ${isCurrent ? 'text-emerald-600' : 'text-slate-400'}`}>
-                        {isCurrent ? '▶' : idx + 1}
-                      </span>
-
-                      {/* Small poster */}
-                      {item.tmdb_poster_url ? (
-                        <img
-                          src={item.tmdb_poster_url}
-                          alt={item.title}
-                          className="h-[54px] w-[36px] rounded-md object-cover shrink-0 shadow-sm"
-                          onError={(e) => {
-                            const el = e.target as HTMLImageElement
-                            el.style.display = 'none'
-                          }}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={pendingItems.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div>
+                    {pendingItems.map((item, idx) => {
+                      const isCurrent = isPlaying && currentIdx === idx
+                      return (
+                        <SortablePlaylistItem
+                          key={item.id}
+                          item={item}
+                          idx={idx}
+                          isCurrent={isCurrent}
+                          progressInItem={progressInItem}
+                          isPlaying={isPlaying}
+                          isDragging={activeDragId === item.id}
+                          onRemove={(id) => removeItemMut.mutate(id)}
                         />
-                      ) : (
-                        <div className="h-[54px] w-[36px] rounded-md bg-slate-100 shrink-0 flex items-center justify-center">
-                          <Film size={14} className="text-slate-400" />
-                        </div>
-                      )}
-
-                      {/* Title + duration + progress */}
-                      <div className="min-w-0 flex-1">
-                        <div className={`truncate text-xs font-medium leading-snug ${isCurrent ? 'text-emerald-700' : 'text-slate-700'}`}>
-                          {item.tmdb_title || item.title}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          {formatDuration(item.duration_seconds)}
-                        </div>
-                        {isCurrent && (
-                          <div className="mt-1.5 h-0.5 w-full rounded-full bg-slate-200 overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
-                              style={{ width: `${Math.min(progressInItem * 100, 100)}%` }}
-                            />
+                      )
+                    })}
+                  </div>
+                </SortableContext>
+                <DragOverlay dropAnimation={null}>
+                  {activeDragId !== null && (() => {
+                    const item = pendingItems.find((i) => i.id === activeDragId)
+                    if (!item) return null
+                    return (
+                      <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-blue-200 rounded-xl shadow-2xl opacity-95">
+                        <GripVertical size={14} className="text-blue-400 shrink-0" />
+                        <span className="w-5 shrink-0 text-center text-xs font-mono text-slate-400">
+                          {pendingItems.findIndex((i) => i.id === activeDragId) + 1}
+                        </span>
+                        {item.tmdb_poster_url ? (
+                          <img
+                            src={item.tmdb_poster_url}
+                            alt={item.title}
+                            className="h-[54px] w-[36px] rounded-md object-cover shrink-0 shadow-sm"
+                          />
+                        ) : (
+                          <div className="h-[54px] w-[36px] rounded-md bg-slate-100 shrink-0 flex items-center justify-center">
+                            <Film size={14} className="text-slate-400" />
                           </div>
                         )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium leading-snug text-slate-700">
+                            {item.tmdb_title || item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            {formatDuration(item.duration_seconds)}
+                          </div>
+                        </div>
                       </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <button
-                          onClick={() => moveItem(idx, -1)}
-                          disabled={idx === 0 || isPlaying}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-20 transition"
-                          title="Yukari"
-                        >
-                          <ArrowUp size={11} />
-                        </button>
-                        <button
-                          onClick={() => moveItem(idx, 1)}
-                          disabled={idx === pendingItems.length - 1 || isPlaying}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-20 transition"
-                          title="Asagi"
-                        >
-                          <ArrowDown size={11} />
-                        </button>
-                        <button
-                          onClick={() => removeItemMut.mutate(item.id)}
-                          disabled={isPlaying}
-                          className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-20 transition"
-                          title="Kaldir"
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })()}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
 
