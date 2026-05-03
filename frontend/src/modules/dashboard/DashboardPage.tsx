@@ -24,6 +24,7 @@ import MetricBar from '../../components/ui/MetricBar'
 import api from '../../utils/api'
 import { serversApi } from '../servers/services/serversApi'
 import { seriesApi } from '../content/services/contentApi'
+import ViewerMapWidget from './components/ViewerMapWidget'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -598,6 +599,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Viewer Map Widget ── */}
+      <ViewerMapWidget />
 
     </div>
   )
