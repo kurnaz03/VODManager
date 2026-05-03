@@ -614,6 +614,35 @@ def clear_finished_jobs(db: Session) -> int:
     return count
 
 
+def clear_by_status(db: Session, status_filter: str) -> int:
+    """Delete jobs by status. 'transcoding' jobs are never deleted for safety."""
+    allowed = {"completed", "failed", "queued", "cancelled", "paused"}
+    if status_filter not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Gecersiz status: {status_filter}. Izin verilenler: {', '.join(allowed)}",
+        )
+    q = db.query(TranscodeJob).filter(TranscodeJob.status == status_filter)
+    count = q.count()
+    q.delete(synchronize_session=False)
+    db.commit()
+    return count
+
+
+def clear_selected(db: Session, ids: list[int]) -> int:
+    """Delete jobs by explicit id list. Skips jobs with status='transcoding'."""
+    if not ids:
+        return 0
+    q = (
+        db.query(TranscodeJob)
+        .filter(TranscodeJob.id.in_(ids), TranscodeJob.status != "transcoding")
+    )
+    count = q.count()
+    q.delete(synchronize_session=False)
+    db.commit()
+    return count
+
+
 # ----- Queue control (called from API; actual work is in Celery) --------------
 
 def start_job(db: Session, job_id: int) -> dict[str, Any]:

@@ -105,6 +105,14 @@ export const transcodeJobApi = {
     const r = await api.post('/transcode-jobs/clear')
     return r.data
   },
+  async clearByStatus(statusFilter: string): Promise<{ cleared: number }> {
+    const r = await api.post(`/transcode-jobs/clear?status=${encodeURIComponent(statusFilter)}`)
+    return r.data
+  },
+  async clearSelected(ids: number[]): Promise<{ cleared: number }> {
+    const r = await api.post('/transcode-jobs/clear-selected', { ids })
+    return r.data
+  },
   async progress(id: number): Promise<JobProgress> {
     const r = await api.get<JobProgress>(`/transcode-jobs/progress/${id}`)
     return r.data

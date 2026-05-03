@@ -1,7 +1,8 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -177,6 +178,22 @@ def start_queue(db: Session = Depends(get_db)):
 
 
 @job_router.post("/clear")
-def clear_jobs(db: Session = Depends(get_db)):
-    count = job_service.clear_finished_jobs(db)
+def clear_jobs(
+    status_filter: str | None = Query(None, alias="status"),
+    db: Session = Depends(get_db),
+):
+    if status_filter:
+        count = job_service.clear_by_status(db, status_filter)
+    else:
+        count = job_service.clear_finished_jobs(db)
+    return {"cleared": count}
+
+
+class ClearSelectedBody(BaseModel):
+    ids: list[int]
+
+
+@job_router.post("/clear-selected")
+def clear_selected_jobs(body: ClearSelectedBody, db: Session = Depends(get_db)):
+    count = job_service.clear_selected(db, body.ids)
     return {"cleared": count}

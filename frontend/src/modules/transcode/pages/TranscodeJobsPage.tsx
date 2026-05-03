@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Play,
@@ -10,6 +10,7 @@ import {
   Film,
   X,
   Loader2,
+  ChevronDown,
 } from 'lucide-react'
 import { contentApi, Category, moviesApi, MovieContent } from '../../content/services/contentApi'
 import { transcodeApi, TranscodeProfile } from '../services/transcodeApi'
@@ -34,6 +35,9 @@ const COUNTDOWN_POSITIONS = [
   { value: 'bottom-left', label: 'Sol Alt' },
   { value: 'bottom-right', label: 'Sag Alt' },
 ]
+
+// Statuses that block a movie from appearing in the add-job dropdown
+const ACTIVE_STATUSES = ['queued', 'transcoding', 'previewing', 'paused', 'completed']
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
@@ -159,6 +163,70 @@ function PreviewModal({ jobId, onClose }: { jobId: number; onClose: () => void }
   )
 }
 
+// ── Clear Dropdown ─────────────────────────────────────────────────────────────
+
+type ClearAction = 'completed' | 'failed' | 'queued' | 'selected'
+
+function ClearDropdown({
+  isPending,
+  hasSelection,
+  onSelect,
+}: {
+  isPending: boolean
+  hasSelection: boolean
+  onSelect: (action: ClearAction) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  const items: { action: ClearAction; label: string; dot: string }[] = [
+    { action: 'completed', label: 'Tamamlananlari Temizle', dot: 'bg-emerald-400' },
+    { action: 'failed', label: 'Hata Verenleri Temizle', dot: 'bg-rose-400' },
+    { action: 'queued', label: 'Bekleyenleri Temizle', dot: 'bg-slate-400' },
+    { action: 'selected', label: 'Secilenleri Temizle', dot: 'bg-blue-500' },
+  ]
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={isPending}
+        className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition"
+      >
+        <Eraser size={13} />
+        Temizle
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-52 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {items.map((item) => (
+            <button
+              key={item.action}
+              disabled={item.action === 'selected' && !hasSelection}
+              onClick={() => {
+                setOpen(false)
+                onSelect(item.action)
+              }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${item.dot}`} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TranscodeJobsPage() {
@@ -190,11 +258,14 @@ export default function TranscodeJobsPage() {
 
   // UI state
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmClear, setConfirmClear] = useState<{ action: ClearAction; label: string } | null>(null)
   const [previewJobId, setPreviewJobId] = useState<number | null>(null)
   const [pendingPreviewId, setPendingPreviewId] = useState<number | null>(null)
   const [seenPreviewing, setSeenPreviewing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+
+  // Multi-select state
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set())
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type })
@@ -241,10 +312,26 @@ export default function TranscodeJobsPage() {
   const servers: Server[] = serversQ.data ?? []
   const jobs: TranscodeJob[] = jobsQ.data ?? []
 
-  const selectedMovie = filteredMovies.find((m) => m.id === selectedMovieId) ?? null
+  // Ozellik 3: Kuyrukta/aktif/tamamlanan olan filmleri gizle
+  const activeJobMovieIds = new Set(
+    jobs
+      .filter((j) => ACTIVE_STATUSES.includes(j.status))
+      .map((j) => j.movie_content_id)
+  )
+  const availableMovies = filteredMovies.filter((m) => !activeJobMovieIds.has(m.id))
+
+  const selectedMovie = availableMovies.find((m) => m.id === selectedMovieId)
+    ?? filteredMovies.find((m) => m.id === selectedMovieId)
+    ?? null
+
+  // Ozellik 4: Secili film icin tamamlanan profil id'leri
+  const completedProfileIds = new Set(
+    jobs
+      .filter((j) => j.status === 'completed' && j.movie_content_id === selectedMovieId)
+      .map((j) => j.transcode_profile_id)
+  )
 
   // ── Preview polling ───────────────────────────────────────────────────────
-  // After triggering preview, watch job status: "previewing" → "queued" means done
 
   useEffect(() => {
     if (pendingPreviewId === null) return
@@ -254,7 +341,6 @@ export default function TranscodeJobsPage() {
     if (job.status === 'previewing') {
       setSeenPreviewing(true)
     } else if (job.status !== 'previewing' && seenPreviewing) {
-      // Preview task finished (success or failure)
       setPendingPreviewId(null)
       setSeenPreviewing(false)
       if (job.error_message && job.error_message.startsWith('Onizleme hatasi')) {
@@ -272,6 +358,8 @@ export default function TranscodeJobsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transcode-jobs'] })
       showToast('Job kuyruga eklendi')
+      // Reset movie selection so the newly queued movie disappears from list
+      setSelectedMovieId('')
     },
     onError: (e: any) => showToast(e?.response?.data?.detail ?? 'Hata', 'err'),
   })
@@ -317,7 +405,28 @@ export default function TranscodeJobsPage() {
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['transcode-jobs'] })
       showToast(`${r.cleared} job temizlendi`)
-      setConfirmClear(false)
+      setConfirmClear(null)
+    },
+    onError: (e: any) => showToast(e?.response?.data?.detail ?? 'Hata', 'err'),
+  })
+
+  const clearByStatusMut = useMutation({
+    mutationFn: (statusFilter: string) => transcodeJobApi.clearByStatus(statusFilter),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['transcode-jobs'] })
+      showToast(`${r.cleared} job temizlendi`)
+      setConfirmClear(null)
+    },
+    onError: (e: any) => showToast(e?.response?.data?.detail ?? 'Hata', 'err'),
+  })
+
+  const clearSelectedMut = useMutation({
+    mutationFn: (ids: number[]) => transcodeJobApi.clearSelected(ids),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['transcode-jobs'] })
+      showToast(`${r.cleared} job temizlendi`)
+      setSelectedJobIds(new Set())
+      setConfirmClear(null)
     },
     onError: (e: any) => showToast(e?.response?.data?.detail ?? 'Hata', 'err'),
   })
@@ -332,6 +441,59 @@ export default function TranscodeJobsPage() {
     },
     onError: (e: any) => showToast(e?.response?.data?.detail ?? 'Onizleme hatasi', 'err'),
   })
+
+  // ── Clear action handler ───────────────────────────────────────────────────
+
+  function handleClearAction(action: ClearAction) {
+    const labels: Record<ClearAction, string> = {
+      completed: 'Tamamlanmis joblar silinecek. Emin misiniz?',
+      failed: 'Hata veren joblar silinecek. Emin misiniz?',
+      queued: 'Bekleyen (queued) joblar silinecek. Emin misiniz?',
+      selected: `${selectedJobIds.size} secili job silinecek. Emin misiniz?`,
+    }
+    const titles: Record<ClearAction, string> = {
+      completed: 'Tamamlananlari Temizle',
+      failed: 'Hata Verenleri Temizle',
+      queued: 'Bekleyenleri Temizle',
+      selected: 'Secilenleri Temizle',
+    }
+    setConfirmClear({ action, label: labels[action] })
+    // store title for dialog
+    void titles
+  }
+
+  function executeClear() {
+    if (!confirmClear) return
+    if (confirmClear.action === 'selected') {
+      clearSelectedMut.mutate(Array.from(selectedJobIds))
+    } else {
+      clearByStatusMut.mutate(confirmClear.action)
+    }
+  }
+
+  // ── Checkbox helpers ──────────────────────────────────────────────────────
+
+  const allSelectableIds = jobs
+    .filter((j) => j.status !== 'transcoding')
+    .map((j) => j.id)
+  const allSelected = allSelectableIds.length > 0 && allSelectableIds.every((id) => selectedJobIds.has(id))
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedJobIds(new Set())
+    } else {
+      setSelectedJobIds(new Set(allSelectableIds))
+    }
+  }
+
+  function toggleJobSelect(id: number) {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // ── Form submit ───────────────────────────────────────────────────────────
 
@@ -351,10 +513,8 @@ export default function TranscodeJobsPage() {
       text_color: textColor,
       text_bg_enabled: textBgEnabled,
       text_bg_color: textBgColor,
-      // Yazi kenar boslugu (padding) - saniye cinsinden
       text_padding_top: textPaddingTop,
       text_padding_bottom: textPaddingBottom,
-      // Yazi fade efekti - interval dakikadan saniyeye cevriliyor
       text_fade_enabled: textFadeEnabled,
       text_fade_interval: textFadeIntervalMin * 60,
       text_fade_duration: textFadeDuration,
@@ -367,6 +527,15 @@ export default function TranscodeJobsPage() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  const clearIsPending = clearMut.isPending || clearByStatusMut.isPending || clearSelectedMut.isPending
+
+  const CLEAR_TITLES: Record<ClearAction, string> = {
+    completed: 'Tamamlananlari Temizle',
+    failed: 'Hata Verenleri Temizle',
+    queued: 'Bekleyenleri Temizle',
+    selected: 'Secilenleri Temizle',
+  }
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -395,12 +564,12 @@ export default function TranscodeJobsPage() {
           onCancel={() => setConfirmDelete(null)}
         />
       )}
-      {confirmClear && (
+      {confirmClear !== null && (
         <ConfirmDialog
-          title="Kuyrugu Temizle"
-          message="Tamamlanmis ve basarisiz tum joblar silinecek. Emin misiniz?"
-          onConfirm={() => clearMut.mutate()}
-          onCancel={() => setConfirmClear(false)}
+          title={CLEAR_TITLES[confirmClear.action]}
+          message={confirmClear.label}
+          onConfirm={executeClear}
+          onCancel={() => setConfirmClear(null)}
         />
       )}
 
@@ -441,7 +610,7 @@ export default function TranscodeJobsPage() {
                   ))}
                 </select>
               </div>
-              {/* Movie */}
+              {/* Movie — Ozellik 3: activeJobMovieIds filtresi */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-slate-600">Film Sec *</label>
                 <select
@@ -451,12 +620,17 @@ export default function TranscodeJobsPage() {
                   onChange={(e) => setSelectedMovieId(e.target.value === '' ? '' : Number(e.target.value))}
                 >
                   <option value="">-- Film Seciniz --</option>
-                  {filteredMovies.map((m) => (
+                  {availableMovies.map((m) => (
                     <option key={m.id} value={m.id} disabled={!m.file_path}>
                       {m.title}{!m.file_path ? ' (dosya yok)' : ''}
                     </option>
                   ))}
                 </select>
+                {activeJobMovieIds.size > 0 && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    {activeJobMovieIds.size} film kuyrukta/tamamlandi — listeden gizlendi
+                  </p>
+                )}
               </div>
             </div>
 
@@ -470,6 +644,7 @@ export default function TranscodeJobsPage() {
 
             {/* Row 2: Profile & Server */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Profil — Ozellik 4: tamamlanan profiller disabled */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-slate-600">Transcode Profili *</label>
                 <select
@@ -479,9 +654,19 @@ export default function TranscodeJobsPage() {
                   onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
                 >
                   <option value="">-- Profil Seciniz --</option>
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
+                  {profiles.map((p) => {
+                    const done = completedProfileIds.has(p.id)
+                    return (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        disabled={done}
+                        title={done ? 'Bu film bu profille zaten transcode edildi' : undefined}
+                      >
+                        {p.name}{done ? ' (transcode edildi)' : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               <div>
@@ -731,12 +916,20 @@ export default function TranscodeJobsPage() {
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col">
           {/* Queue header */}
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 px-4 py-4 flex-shrink-0 gap-2">
-            <h2 className="text-base font-semibold text-slate-700">
-              Transcode Kuyrugu
-              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
-                {jobs.length}
-              </span>
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-slate-700">
+                Transcode Kuyrugu
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
+                  {jobs.length}
+                </span>
+              </h2>
+              {/* Secili sayisi */}
+              {selectedJobIds.size > 0 && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                  {selectedJobIds.size} secili
+                </span>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => startQueueMut.mutate()}
@@ -746,14 +939,12 @@ export default function TranscodeJobsPage() {
                 <ListChecks size={13} />
                 Kuyrugu Baslat
               </button>
-              <button
-                onClick={() => setConfirmClear(true)}
-                disabled={clearMut.isPending}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition"
-              >
-                <Eraser size={13} />
-                Temizle
-              </button>
+              {/* Ozellik 1: Dropdown temizle */}
+              <ClearDropdown
+                isPending={clearIsPending}
+                hasSelection={selectedJobIds.size > 0}
+                onSelect={handleClearAction}
+              />
             </div>
           </div>
 
@@ -764,16 +955,34 @@ export default function TranscodeJobsPage() {
             <div className="p-10 text-center text-sm text-slate-400">Kuyrukta job yok.</div>
           ) : (
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm" style={{minWidth: '600px'}}>
+              <table className="w-full text-sm" style={{minWidth: '620px'}}>
                 <thead>
                   <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    <th className="px-4 py-3">#</th>
-                    <th className="px-4 py-3">Video</th>
-                    <th className="px-4 py-3">Profil</th>
-                    <th className="px-4 py-3">Durum</th>
-                    <th className="px-4 py-3 min-w-[120px]">Ilerleme</th>
-                    <th className="px-4 py-3 whitespace-nowrap">Kalan Sure</th>
-                    <th className="px-4 py-3 text-right">Aksiyon</th>
+                    {/* Ozellik 2: Hepsini sec checkbox */}
+                    <th className="px-3 py-3 w-8">
+                      <button
+                        onClick={toggleSelectAll}
+                        title={allSelected ? 'Secimi Kaldir' : 'Hepsini Sec'}
+                        className={`flex h-4 w-4 items-center justify-center rounded border transition ${
+                          allSelected
+                            ? 'border-blue-500 bg-blue-500 text-white'
+                            : 'border-slate-300 bg-white hover:border-blue-400'
+                        }`}
+                      >
+                        {allSelected && (
+                          <svg viewBox="0 0 10 8" fill="none" className="h-2.5 w-2.5">
+                            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">#</th>
+                    <th className="px-3 py-3">Video</th>
+                    <th className="px-3 py-3">Profil</th>
+                    <th className="px-3 py-3">Durum</th>
+                    <th className="px-3 py-3 min-w-[120px]">Ilerleme</th>
+                    <th className="px-3 py-3 whitespace-nowrap">Kalan Sure</th>
+                    <th className="px-3 py-3 text-right">Aksiyon</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -781,6 +990,8 @@ export default function TranscodeJobsPage() {
                     <JobRow
                       key={job.id}
                       job={job}
+                      selected={selectedJobIds.has(job.id)}
+                      onToggleSelect={() => toggleJobSelect(job.id)}
                       onStart={() => startMut.mutate(job.id)}
                       onStop={() => stopMut.mutate(job.id)}
                       onDelete={() => setConfirmDelete(job.id)}
@@ -804,6 +1015,8 @@ export default function TranscodeJobsPage() {
 
 function JobRow({
   job,
+  selected,
+  onToggleSelect,
   onStart,
   onStop,
   onDelete,
@@ -813,6 +1026,8 @@ function JobRow({
   previewLoading,
 }: {
   job: TranscodeJob
+  selected: boolean
+  onToggleSelect: () => void
   onStart: () => void
   onStop: () => void
   onDelete: () => void
@@ -824,13 +1039,33 @@ function JobRow({
   const canStart = job.status === 'queued' || job.status === 'paused' || job.status === 'failed'
   const canStop = job.status === 'transcoding'
   const canPreview = (job.status === 'queued' || job.status === 'paused' || job.status === 'failed') && !previewPending
+  const isTranscoding = job.status === 'transcoding'
 
   return (
-    <tr className="hover:bg-slate-50/60 transition">
-      <td className="px-4 py-3 text-xs text-slate-400 font-mono">
+    <tr className={`hover:bg-slate-50/60 transition ${selected ? 'bg-blue-50/40' : ''}`}>
+      {/* Ozellik 2: Mavi checkbox */}
+      <td className="px-3 py-3 w-8">
+        <button
+          onClick={onToggleSelect}
+          disabled={isTranscoding}
+          title={isTranscoding ? 'Transcode sirasinda secilemez' : undefined}
+          className={`flex h-4 w-4 items-center justify-center rounded border transition ${
+            selected
+              ? 'border-blue-500 bg-blue-500 text-white'
+              : 'border-slate-300 bg-white hover:border-blue-400'
+          } disabled:opacity-30 disabled:cursor-not-allowed`}
+        >
+          {selected && (
+            <svg viewBox="0 0 10 8" fill="none" className="h-2.5 w-2.5">
+              <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </button>
+      </td>
+      <td className="px-3 py-3 text-xs text-slate-400 font-mono">
         {String(job.unique_number).padStart(5, '0')}
       </td>
-      <td className="px-4 py-3 max-w-[160px]">
+      <td className="px-3 py-3 max-w-[160px]">
         <div className="font-medium text-slate-700 truncate text-xs">{job.movie_title ?? '—'}</div>
         {job.server_name && (
           <div className="mt-0.5 text-xs text-slate-400 truncate">{job.server_name}</div>
@@ -839,8 +1074,8 @@ function JobRow({
           <div className="mt-0.5 text-xs text-slate-400 truncate italic">"{job.overlay_text}"</div>
         )}
       </td>
-      <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[80px]">{job.profile_name ?? '—'}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-3 text-slate-600 text-xs truncate max-w-[80px]">{job.profile_name ?? '—'}</td>
+      <td className="px-3 py-3">
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_CLASSES[job.status] ?? 'bg-slate-100 text-slate-600'}`}>
           {STATUS_LABELS[job.status] ?? job.status}
         </span>
@@ -850,7 +1085,7 @@ function JobRow({
           </div>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-3">
         <div className="flex items-center gap-2">
           <div className="relative h-2 flex-1 rounded-full bg-slate-100 overflow-hidden min-w-[60px]">
             <div
@@ -867,10 +1102,10 @@ function JobRow({
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
+      <td className="px-3 py-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
         {job.status === 'transcoding' ? formatEta(job.eta_seconds) : '—'}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-3">
         <div className="flex items-center justify-end gap-1">
           {/* Preview (create) */}
           {canPreview && (
@@ -924,7 +1159,7 @@ function JobRow({
             onClick={onDelete}
             title="Sil"
             className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-            disabled={job.status === 'transcoding'}
+            disabled={isTranscoding}
           >
             <Trash2 size={14} />
           </button>
