@@ -4,6 +4,7 @@ Bağlantı takibi ve geolocation servisi.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -15,29 +16,37 @@ from sqlalchemy.orm import Session
 from app.modules.connections.models import UserConnection, UserWatchHistory
 from app.modules.iptv_users.models import IptvUser
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Geolocation
 # ---------------------------------------------------------------------------
 
-def get_geo_info(ip: str) -> dict[str, str]:
-    """ip-api.com ücretsiz API ile IP bilgisi çek. Hata durumunda boş döner."""
-    # Lokal/private IP'ler için sorgu yapma
-    if ip in ("127.0.0.1", "::1") or ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
-        return {"country": "", "countryCode": "", "isp": ""}
+def _get_isp_from_api(ip: str) -> str:
+    """Fallback: fetch ISP info from ip-api.com (only used when ISP lock is active)."""
     try:
-        resp = httpx.get(f"http://ip-api.com/json/{ip}?fields=status,country,countryCode,isp", timeout=3.0)
+        resp = httpx.get(
+            f"http://ip-api.com/json/{ip}?fields=status,isp",
+            timeout=3.0,
+        )
         if resp.status_code == 200:
             data = resp.json()
-            if data.get("countryCode"):
-                return {
-                    "country": data.get("country", ""),
-                    "countryCode": data.get("countryCode", ""),
-                    "isp": data.get("isp", ""),
-                }
+            return data.get("isp", "")
     except Exception:
         pass
-    return {"country": "", "countryCode": "", "isp": ""}
+    return ""
+
+
+def get_geo_info(ip: str) -> dict[str, str]:
+    """
+    Offline GeoIP lookup using DB-IP Lite CSV (loaded at startup).
+    Returns country code from local data; ISP field is left empty
+    (ISP is fetched on-demand via _get_isp_from_api only when needed).
+    """
+    from app.modules.dashboard.geoip import lookup as geoip_lookup
+
+    cc = geoip_lookup(ip) or ""
+    return {"country": "", "countryCode": cc, "isp": ""}
 
 
 # ---------------------------------------------------------------------------
@@ -61,18 +70,16 @@ def check_restrictions(db: Session, user: IptvUser, ip: str, geo: dict[str, str]
     ISP / IP / Ülke kısıtlamalarını kontrol et.
     Kural ihlali varsa HTTPException(403) fırlatır.
     """
-    # ISP kilidi
+    # ISP kilidi — DB-IP Lite'ta ISP verisi yok, gerektiğinde ip-api.com'dan çek
     if user.isp_lock_info:
         isp_lock = user.isp_lock_info.strip()
-        if isp_lock and geo.get("isp"):
-            if isp_lock.lower() not in geo["isp"].lower():
+        if isp_lock:
+            isp_name = geo.get("isp") or _get_isp_from_api(ip)
+            if isp_name and isp_lock.lower() not in isp_name.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="ISP kısıtlaması: Bu bağlantıya izin verilmiyor",
                 )
-        elif isp_lock and not geo.get("isp"):
-            # ISP bilgisi çekilemedi, geçir
-            pass
 
     # IP kilidi
     allowed_ips = _parse_json_list(user.allowed_ips)
