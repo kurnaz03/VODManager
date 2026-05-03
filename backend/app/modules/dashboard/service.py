@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any
+from typing import Optional
 
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -92,7 +92,7 @@ except Exception:
     _redis_client = None  # type: ignore
 
 
-def _cache_get(key: str) -> Any | None:
+def _cache_get(key: str) -> Optional[dict]:
     if _redis_client is None:
         return None
     try:
@@ -104,7 +104,7 @@ def _cache_get(key: str) -> Any | None:
     return None
 
 
-def _cache_set(key: str, data: Any, ttl: int) -> None:
+def _cache_set(key: str, data: dict, ttl: int) -> None:
     if _redis_client is None:
         return
     try:
