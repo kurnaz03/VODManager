@@ -44,6 +44,16 @@ function LogoSizeTooltip() {
 
 const VIDEO_CODECS = ['h264', 'h265', 'vp9', 'av1']
 const VIDEO_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
+const NVENC_PRESETS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
+const NVENC_PRESET_LABELS: Record<string, string> = {
+  p1: 'p1 (en hizli)',
+  p2: 'p2',
+  p3: 'p3',
+  p4: 'p4 (dengeli)',
+  p5: 'p5',
+  p6: 'p6',
+  p7: 'p7 (en kaliteli)',
+}
 const VIDEO_TUNES = ['', 'film', 'animation', 'grain', 'stillimage', 'fastdecode', 'zerolatency']
 const VIDEO_PROFILES = ['', 'baseline', 'main', 'high']
 const VIDEO_LEVELS = ['', '3.0', '3.1', '4.0', '4.1', '4.2', '5.0', '5.1']
@@ -511,6 +521,17 @@ function ProfileFormModal({
                 </div>
               </div>
 
+              {form.hardware_accel === 'nvenc' && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  <span className="font-semibold">GPU Hizlandirma aktif:</span>{' '}
+                  <span className="font-mono uppercase">{form.video_codec}</span> otomatik olarak{' '}
+                  <span className="font-mono">
+                    {form.video_codec === 'h265' ? 'hevc_nvenc' : `${form.video_codec}_nvenc`}
+                  </span>{' '}
+                  ile encode edilecek. GTX 1080 ile ~10-20x hizli.
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="panel-label">Genislik (px)</label>
@@ -526,6 +547,9 @@ function ProfileFormModal({
                 <div>
                   <label className="panel-label">CRF (0-51, dusuk=kaliteli)</label>
                   <input type="number" min={0} max={51} className="panel-input" value={form.video_crf ?? ''} onChange={(e) => set('video_crf', e.target.value ? Number(e.target.value) : null)} placeholder="18" />
+                  {form.hardware_accel === 'nvenc' && (
+                    <p className="mt-1 text-xs text-amber-600">NVENC modunda CRF kullanilmaz; sabit kalite icin Video Bitrate veya Max Bitrate girin.</p>
+                  )}
                 </div>
                 <div>
                   <label className="panel-label">Max Bitrate</label>
@@ -566,8 +590,14 @@ function ProfileFormModal({
                 <div>
                   <label className="panel-label">Preset</label>
                   <select className="panel-select" value={form.video_preset ?? ''} onChange={(e) => set('video_preset', (e.target.value || null) as TranscodeProfileCreate['video_preset'])}>
-                    {VIDEO_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    {form.hardware_accel === 'nvenc'
+                      ? NVENC_PRESETS.map((p) => <option key={p} value={p}>{NVENC_PRESET_LABELS[p]}</option>)
+                      : VIDEO_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)
+                    }
                   </select>
+                  {form.hardware_accel === 'nvenc' && (
+                    <p className="mt-1 text-xs text-slate-400">NVENC preset: p1=en hizli, p7=en kaliteli. p4 dengeli baslangi noktasidir.</p>
+                  )}
                 </div>
               </div>
 
@@ -935,6 +965,11 @@ function ProfileFormModal({
                   <select className="panel-select" value={form.hardware_accel ?? ''} onChange={(e) => set('hardware_accel', (e.target.value || null) as TranscodeProfileCreate['hardware_accel'])}>
                     {HARDWARE_ACCELS.map((h) => <option key={h} value={h}>{h || 'Varsayilan (None)'}</option>)}
                   </select>
+                  {form.hardware_accel === 'nvenc' ? (
+                    <p className="mt-1 text-xs text-blue-600">NVENC: NVIDIA GPU ile encode (GTX 1080 destekli). Preset secimi: Video tab'daki preset NVENC modunda p1-p7 olur.</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-400">GPU hizlandirma icin NVENC (NVIDIA) secin; Gelismis ayarda hwaccel_type=cuda ile kullanin.</p>
+                  )}
                 </div>
                 <div>
                   <label className="panel-label">Hwaccel Tipi</label>

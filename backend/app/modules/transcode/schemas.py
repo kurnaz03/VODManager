@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 LogoPositionLiteral = Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
 VideoCodecLiteral = Literal["h264", "h265", "vp9", "av1"]
-VideoPresetLiteral = Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+VideoPresetLiteral = Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "p1", "p2", "p3", "p4", "p5", "p6", "p7"]
 VideoTuneLiteral = Literal["film", "animation", "grain", "stillimage", "fastdecode", "zerolatency"]
 VideoPixelFormatLiteral = Literal["yuv420p", "yuv422p", "yuv444p"]
 VideoProfileLiteral = Literal["baseline", "main", "high"]
