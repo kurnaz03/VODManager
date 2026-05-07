@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Film, Pencil, Plus, Trash2, X, Check } from 'lucide-react'
+import { Film, Pencil, Plus, Trash2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { contentApi, Category, MovieContent, MovieContentUpdate, moviesApi } from '../services/contentApi'
 
@@ -10,12 +10,16 @@ function formatSize(bytes: number | null) {
   return mb < 1024 ? `${mb.toFixed(1)} MB` : `${(mb / 1024).toFixed(2)} GB`
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50]
+
 export default function MoviesPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<MovieContent | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [pageSize, setPageSize] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const categoriesQuery = useQuery({
     queryKey: ['categories', 'movies'],
@@ -44,7 +48,26 @@ export default function MoviesPage() {
   })
 
   const categories: Category[] = categoriesQuery.data ?? []
-  const movies: MovieContent[] = moviesQuery.data ?? []
+  const allMovies: MovieContent[] = moviesQuery.data ?? []
+
+  // Pagination
+  const totalItems = allMovies.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const startIndex = (safePage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, totalItems)
+  const movies = allMovies.slice(startIndex, endIndex)
+
+  // Reset to page 1 when category or pageSize changes
+  const handleCategoryChange = (val: string) => {
+    setSelectedCategoryId(val ? Number(val) : null)
+    setCurrentPage(1)
+  }
+
+  const handlePageSizeChange = (val: number) => {
+    setPageSize(val)
+    setCurrentPage(1)
+  }
 
   return (
     <div className="space-y-6">
@@ -70,21 +93,42 @@ export default function MoviesPage() {
 
       <section className="glass-panel p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-medium text-slate-700">
-            {movies.length} film listelendi
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-700">
+              {totalItems} film listelendi
+            </span>
+            {totalItems > 0 && (
+              <span className="text-xs text-slate-400">
+                ({startIndex + 1}-{endIndex} arasi)
+              </span>
+            )}
           </div>
-          <select
-            className="panel-select w-full sm:w-auto sm:max-w-[220px]"
-            value={selectedCategoryId ?? ''}
-            onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">Tum Kategoriler</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-slate-500">Sayfa basina</label>
+              <select
+                className="panel-select h-9 w-20 text-sm"
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <select
+              className="panel-select w-full sm:w-auto sm:max-w-[220px]"
+              value={selectedCategoryId ?? ''}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+            >
+              <option value="">Tum Kategoriler</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="table-shell overflow-x-auto">
@@ -159,6 +203,31 @@ export default function MoviesPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              <ChevronLeft size={16} /> Onceki
+            </button>
+            <span className="text-sm text-slate-500">
+              Sayfa <span className="font-semibold text-slate-700">{safePage}</span> / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              Sonraki <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Edit Modal */}
