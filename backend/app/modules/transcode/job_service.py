@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,17 @@ from app.modules.transcode.job_schemas import TranscodeJobCreate, TranscodeJobUp
 
 TRANSCODE_BASE_DIR = Path("/var/www/vod-manager/shared/transcode")
 PREVIEW_DIR = Path("/tmp")
+
+_MAX_LOG_BYTES = 50 * 1024  # 50 KB max log per job
+
+
+def _append_log(current: str | None, new_text: str) -> str:
+    """Append new_text to current log, keeping at most _MAX_LOG_BYTES from the end."""
+    combined = (current or "") + new_text
+    if len(combined) > _MAX_LOG_BYTES:
+        combined = combined[-_MAX_LOG_BYTES:]
+    return combined
+
 
 # ----- Helpers ----------------------------------------------------------------
 
@@ -56,6 +68,27 @@ def _get_video_duration(file_path: str) -> float | None:
         return float(data["format"]["duration"])
     except Exception:
         return None
+
+
+def _get_video_codec(file_path: str) -> str | None:
+    """Return the codec_name of the first video stream (e.g. 'h264', 'hevc', 'av1')."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_streams", "-select_streams", "v:0", file_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        data = json.loads(result.stdout)
+        streams = data.get("streams", [])
+        if streams:
+            return streams[0].get("codec_name")
+    except Exception:
+        pass
+    return None
 
 
 # ----- Filter builders -------------------------------------------------------
@@ -193,7 +226,15 @@ def build_ffmpeg_cmd(
     hw = profile.hardware_accel or ""
     hwaccel_type = getattr(profile, "hwaccel_type", None) or ""
     if hw == "nvenc" or hwaccel_type == "cuda":
-        cmd += ["-hwaccel", "cuda"]
+        # Only apply -hwaccel cuda if the input codec is CUDA-decodable (h264/hevc).
+        # AV1 and other codecs lack hardware decode on most GPUs and can cause ffmpeg to hang.
+        # Always check the ORIGINAL local file for codec detection (source_override may be remote path).
+        _input_codec = _get_video_codec(job.source_file_path)
+        _CUDA_DECODE_CODECS = {"h264", "hevc", "h265", "mpeg2video", "vc1", "vp8", "vp9"}
+        if _input_codec in _CUDA_DECODE_CODECS:
+            cmd += ["-hwaccel", "cuda"]
+        # If input is not CUDA-decodable (e.g. AV1), skip -hwaccel to avoid GPU hang.
+        # h264_nvenc encoder still works without hardware-accelerated decode.
     elif hw == "vaapi" or hwaccel_type == "vaapi":
         cmd += ["-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi", "-vaapi_device", "/dev/dri/renderD128"]
     elif hw == "qsv" or hwaccel_type == "qsv":
@@ -351,10 +392,13 @@ def build_ffmpeg_cmd(
         "vaapi": {"h264": "h264_vaapi", "h265": "hevc_vaapi"},
         "qsv": {"h264": "h264_qsv", "h265": "hevc_qsv"},
     }
+    # Software codec name mapping (generic names → FFmpeg encoder names)
+    _SW_CODEC_MAP = {"h264": "libx264", "h265": "libx265", "hevc": "libx265", "vp9": "libvpx-vp9"}
     if hw in codec_hw_map:
         video_codec = codec_hw_map[hw].get(profile.video_codec, profile.video_codec)
     else:
-        video_codec = profile.video_codec or "h264"
+        vc = profile.video_codec or "h264"
+        video_codec = _SW_CODEC_MAP.get(vc, vc)
 
     cmd += ["-c:v", video_codec]
 
@@ -377,7 +421,32 @@ def build_ffmpeg_cmd(
     vsync_mode = getattr(profile, "vsync_mode", "cfr") or "cfr"
     cmd += ["-vsync", vsync_mode]
     if profile.video_preset and hw not in ("vaapi",):
-        cmd += ["-preset", profile.video_preset]
+        preset = profile.video_preset
+        # NVENC preset validation: map x264-only presets to nearest NVENC equivalent
+        _NVENC_VALID = {
+            "default", "slow", "medium", "fast", "hp", "hq", "bd",
+            "ll", "llhq", "llhp", "lossless", "losslesshp",
+            "p1", "p2", "p3", "p4", "p5", "p6", "p7",
+        }
+        _X264_TO_NVENC = {
+            "ultrafast": "p1", "superfast": "p1", "veryfast": "p3",
+            "faster": "p3", "fast": "fast", "medium": "medium",
+            "slow": "slow", "slower": "p6", "veryslow": "p7",
+            "placebo": "p7",
+        }
+        # Reverse map: NVENC-only presets (p1-p7) to x264 equivalents for CPU-only profiles
+        _NVENC_TO_X264 = {
+            "p1": "ultrafast", "p2": "superfast", "p3": "veryfast",
+            "p4": "fast", "p5": "medium", "p6": "slow", "p7": "veryslow",
+        }
+        if hw == "nvenc" or hwaccel_type == "cuda":
+            if preset not in _NVENC_VALID:
+                preset = _X264_TO_NVENC.get(preset, "p4")
+        else:
+            # Software codec: map any NVENC-only preset to x264 equivalent
+            if preset in _NVENC_TO_X264:
+                preset = _NVENC_TO_X264[preset]
+        cmd += ["-preset", preset]
     if profile.video_tune:
         cmd += ["-tune", profile.video_tune]
     if profile.video_profile:
@@ -499,6 +568,7 @@ def _serialize_job(job: TranscodeJob) -> dict[str, Any]:
         "started_at": job.started_at,
         "completed_at": job.completed_at,
         "error_message": job.error_message,
+        "log_output": job.log_output,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
     }
@@ -522,7 +592,7 @@ def _get_job(db: Session, job_id: int) -> TranscodeJob:
 # ----- CRUD ------------------------------------------------------------------
 
 def list_jobs(db: Session) -> list[dict[str, Any]]:
-    jobs = _get_job_q(db).order_by(TranscodeJob.id.asc()).all()
+    jobs = _get_job_q(db).filter(TranscodeJob.status != "archived").order_by(TranscodeJob.id.asc()).all()
     return [_serialize_job(j) for j in jobs]
 
 
@@ -541,11 +611,22 @@ def create_job(db: Session, payload: TranscodeJobCreate) -> dict[str, Any]:
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcode profili bulunamadi")
 
+    # Auto-select GPU server for NVENC profiles when no server_id provided
+    effective_server_id = payload.server_id
+    if effective_server_id is None and profile.hardware_accel in ("nvenc",):
+        gpu_server = (
+            db.query(Server)
+            .filter(Server.server_type == "loadbalancer")
+            .first()
+        )
+        if gpu_server:
+            effective_server_id = gpu_server.id
+
     # Insert job first with placeholder values to get the DB-assigned ID
     job = TranscodeJob(
         movie_content_id=payload.movie_content_id,
         transcode_profile_id=payload.transcode_profile_id,
-        server_id=payload.server_id,
+        server_id=effective_server_id,
         source_file_path=movie.file_path,
         output_file_path=None,
         unique_number=0,  # placeholder; will be updated to job.id below
@@ -602,26 +683,56 @@ def delete_job(db: Session, job_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcode job bulunamadi")
     if job.status == "transcoding":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Transcode edilen job silinemez, once durdurun")
-    db.delete(job)
+    # Tamamlanmis job'lari silmek yerine arsivle (VOD channel'a eklenebilsin)
+    if job.status == "completed":
+        job.status = "archived"
+        db.add(job)
+    else:
+        db.delete(job)
     db.commit()
 
 
 def clear_finished_jobs(db: Session) -> int:
-    q = db.query(TranscodeJob).filter(TranscodeJob.status.in_(["completed", "failed", "cancelled"]))
-    count = q.count()
+    """Archive completed jobs so they remain available for VOD channel re-adding.
+    Only failed/cancelled jobs are truly deleted."""
+    completed = (
+        db.query(TranscodeJob)
+        .filter(TranscodeJob.status == "completed")
+        .all()
+    )
+    for job in completed:
+        job.status = "archived"
+        db.add(job)
+
+    q = db.query(TranscodeJob).filter(TranscodeJob.status.in_(["failed", "cancelled"]))
+    deleted_count = q.count()
     q.delete(synchronize_session=False)
+
     db.commit()
-    return count
+    return len(completed) + deleted_count
 
 
 def clear_by_status(db: Session, status_filter: str) -> int:
-    """Delete jobs by status. 'transcoding' jobs are never deleted for safety."""
-    allowed = {"completed", "failed", "queued", "cancelled", "paused"}
+    """Delete jobs by status. 'transcoding' jobs are never deleted for safety.
+    Completed jobs are archived instead of deleted (VOD channel'a eklenebilsin)."""
+    allowed = {"completed", "failed", "queued", "cancelled", "paused", "archived"}
     if status_filter not in allowed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Gecersiz status: {status_filter}. Izin verilenler: {', '.join(allowed)}",
         )
+    if status_filter == "completed":
+        completed = (
+            db.query(TranscodeJob)
+            .filter(TranscodeJob.status == "completed")
+            .all()
+        )
+        for job in completed:
+            job.status = "archived"
+            db.add(job)
+        db.commit()
+        return len(completed)
+
     q = db.query(TranscodeJob).filter(TranscodeJob.status == status_filter)
     count = q.count()
     q.delete(synchronize_session=False)
@@ -630,14 +741,25 @@ def clear_by_status(db: Session, status_filter: str) -> int:
 
 
 def clear_selected(db: Session, ids: list[int]) -> int:
-    """Delete jobs by explicit id list. Skips jobs with status='transcoding'."""
+    """Delete jobs by explicit id list. Skips jobs with status='transcoding'.
+    Completed jobs are archived instead of deleted (VOD channel'a eklenebilsin)."""
     if not ids:
         return 0
+    # Archive completed jobs
+    completed_jobs = (
+        db.query(TranscodeJob)
+        .filter(TranscodeJob.id.in_(ids), TranscodeJob.status == "completed")
+        .all()
+    )
+    for job in completed_jobs:
+        job.status = "archived"
+        db.add(job)
+    # Delete non-completed, non-transcoding jobs
     q = (
         db.query(TranscodeJob)
-        .filter(TranscodeJob.id.in_(ids), TranscodeJob.status != "transcoding")
+        .filter(TranscodeJob.id.in_(ids), TranscodeJob.status.notin_(["transcoding", "completed"]))
     )
-    count = q.count()
+    count = q.count() + len(completed_jobs)
     q.delete(synchronize_session=False)
     db.commit()
     return count
@@ -704,10 +826,10 @@ def create_preview(db: Session, job_id: int) -> dict[str, Any]:
     from app.modules.transcode.tasks import run_preview_job
 
     job = _get_job(db, job_id)
-    if job.status not in ("queued", "paused", "failed"):
+    if job.status not in ("queued", "paused", "failed", "completed", "transcoding"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Sadece kuyrukta/duraklatilmis joblar icin onizleme yapilabilir",
+            detail="Sadece kuyrukta/duraklatilmis/tamamlanmis joblar icin onizleme yapilabilir",
         )
     run_preview_job.delay(job_id)
     return {"job_id": job_id, "preview_path": str(PREVIEW_DIR / f"preview_{job_id}.mp4")}
@@ -776,6 +898,7 @@ def process_transcode(job_id: int) -> None:
 
 def process_preview(job_id: int) -> None:
     db = SessionLocal()
+    original_status: str = "queued"  # fallback default
     try:
         job = (
             db.query(TranscodeJob)
@@ -792,18 +915,46 @@ def process_preview(job_id: int) -> None:
         preview_path = str(PREVIEW_DIR / f"preview_{job_id}.mp4")
         duration = _get_video_duration(job.source_file_path)
 
+        # Remove any stale preview file to avoid ffmpeg permission errors on overwrite
+        try:
+            Path(preview_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        # Remember original status to restore after preview (completed/transcoding jobs must stay in their state)
+        original_status = job.status
+        restore_status = original_status if original_status in ("completed", "transcoding") else "queued"
+
+        # If job is currently transcoding on remote, don't change DB status to avoid confusion with
+        # the remote polling thread. Run preview silently and restore to 'transcoding'.
         job.status = "previewing"
         db.add(job)
         db.commit()
 
-        cmd = build_ffmpeg_cmd(job, profile, preview_path, duration=duration, preview=True)
-        proc = subprocess.run(cmd, capture_output=True, timeout=120)
+        # For remote-server jobs (e.g. NVENC), preview runs locally using CPU.
+        # Temporarily override hardware_accel so the local FFmpeg command does not
+        # request CUDA/NVENC which is not available on the main server.
+        hw_orig = profile.hardware_accel
+        hwaccel_type_orig = getattr(profile, "hwaccel_type", None)
+        if job.server_id and (hw_orig in ("nvenc", "vaapi", "qsv") or hwaccel_type_orig in ("cuda", "vaapi", "qsv")):
+            profile.hardware_accel = None
+            if hasattr(profile, "hwaccel_type"):
+                profile.hwaccel_type = None
+
+        try:
+            cmd = build_ffmpeg_cmd(job, profile, preview_path, duration=duration, preview=True)
+            proc = subprocess.run(cmd, capture_output=True, timeout=120)
+        finally:
+            # Always restore original values (object is not persisted here)
+            profile.hardware_accel = hw_orig
+            if hasattr(profile, "hwaccel_type"):
+                profile.hwaccel_type = hwaccel_type_orig
 
         if proc.returncode == 0:
-            job.status = "queued"
+            job.status = restore_status
             job.error_message = None
         else:
-            job.status = "queued"
+            job.status = restore_status
             job.error_message = f"Onizleme hatasi: {proc.stderr.decode(errors='ignore')[:500]}"
         db.add(job)
         db.commit()
@@ -811,7 +962,8 @@ def process_preview(job_id: int) -> None:
         try:
             job_obj = db.query(TranscodeJob).filter(TranscodeJob.id == job_id).first()
             if job_obj:
-                job_obj.status = "queued"
+                # Restore to original status; if we never set previewing yet, use queued as fallback
+                job_obj.status = original_status if job_obj.status == "previewing" and original_status in ("completed", "transcoding") else "queued"
                 job_obj.error_message = f"Onizleme hatasi: {str(exc)[:500]}"
                 db.add(job_obj)
                 db.commit()
@@ -838,11 +990,28 @@ def _run_local(
         bufsize=1,
     )
 
+    # --- Stderr reader thread (collects FFmpeg log output) ---
+    stderr_buf: list[str] = []
+    stderr_lock = threading.Lock()
+
+    def _read_stderr() -> None:
+        try:
+            for line in proc.stderr:  # type: ignore[union-attr]
+                with stderr_lock:
+                    stderr_buf.append(line)
+        except Exception:
+            pass
+
+    stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
+    stderr_thread.start()
+
     last_db_update = time.time()
+    last_log_flush = time.time()
     progress_data: dict[str, str] = {}
+    log_accumulated: str = ""
 
     while True:
-        line = proc.stdout.readline()
+        line = proc.stdout.readline()  # type: ignore[union-attr]
         if not line:
             if proc.poll() is not None:
                 break
@@ -872,10 +1041,19 @@ def _run_local(
 
             now = time.time()
             if now - last_db_update >= 2.0:
+                # Drain new stderr lines and flush log every ~5s
+                if now - last_log_flush >= 5.0:
+                    with stderr_lock:
+                        new_lines = "".join(stderr_buf)
+                        stderr_buf.clear()
+                    if new_lines:
+                        log_accumulated = _append_log(log_accumulated, new_lines)
+                    last_log_flush = now
                 try:
-                    db.query(TranscodeJob).filter(TranscodeJob.id == job.id).update(
-                        {"progress": pct, "eta_seconds": eta}
-                    )
+                    update_data: dict = {"progress": pct, "eta_seconds": eta}
+                    if log_accumulated:
+                        update_data["log_output"] = log_accumulated
+                    db.query(TranscodeJob).filter(TranscodeJob.id == job.id).update(update_data)
                     db.commit()
                 except Exception:
                     db.rollback()
@@ -894,6 +1072,13 @@ def _run_local(
                 return
             last_db_update = time.time()
 
+    # Collect remaining stderr
+    stderr_thread.join(timeout=5)
+    with stderr_lock:
+        remaining = "".join(stderr_buf)
+    if remaining:
+        log_accumulated = _append_log(log_accumulated, remaining)
+
     proc.wait()
 
     fresh = db.query(TranscodeJob).filter(TranscodeJob.id == job.id).first()
@@ -907,15 +1092,16 @@ def _run_local(
                 "progress": 100.0,
                 "eta_seconds": 0,
                 "completed_at": datetime.now(tz=timezone.utc),
+                "log_output": log_accumulated or None,
             }
         )
         db.commit()
     else:
-        stderr_out = proc.stderr.read() if proc.stderr else ""
         db.query(TranscodeJob).filter(TranscodeJob.id == job.id).update(
             {
                 "status": "failed",
-                "error_message": stderr_out[-2000:] if stderr_out else "FFmpeg hatasi",
+                "error_message": log_accumulated[-10240:] if log_accumulated else "FFmpeg hatasi",
+                "log_output": log_accumulated or None,
             }
         )
         db.commit()
@@ -949,6 +1135,18 @@ def _ensure_ffmpeg_on_remote(ssh: paramiko.SSHClient) -> None:
         stdout.channel.recv_exit_status()
 
 
+def _kill_orphan_ffmpeg_on_remote(ssh: paramiko.SSHClient) -> None:
+    """Kill any lingering ffmpeg processes that use /tmp/vod_* files (orphans from previous runs)."""
+    try:
+        stdin, stdout, stderr = ssh.exec_command(
+            "pgrep -a ffmpeg 2>/dev/null | grep '/tmp/vod_' | awk '{print $1}' | xargs -r kill -9 2>/dev/null; true",
+            timeout=15,
+        )
+        stdout.channel.recv_exit_status()
+    except Exception:
+        pass
+
+
 def _run_remote(
     db: Session,
     job: TranscodeJob,
@@ -966,6 +1164,9 @@ def _run_remote(
 
     ssh = _ssh_connect(server, password)
     try:
+        # Kill any orphaned ffmpeg processes from previous sessions on this server
+        _kill_orphan_ffmpeg_on_remote(ssh)
+
         # Ensure ffmpeg is available on the remote server
         _ensure_ffmpeg_on_remote(ssh)
 
@@ -992,29 +1193,105 @@ def _run_remote(
         )
         cmd_str = " ".join(shlex.quote(c) for c in cmd_list)
 
-        # Run ffmpeg on remote; pipe:1 = stdout for progress
-        stdin, stdout, stderr = ssh.exec_command(cmd_str, get_pty=False)
+        # Write FFmpeg progress to a temp file on remote instead of pipe:1.
+        # Paramiko SSH stdout buffering makes pipe:1 unreliable for progress
+        # (lines arrive in large chunks). Using a file + SFTP polling is more
+        # reliable and avoids PTY escape-code issues.
+        remote_progress = f"/tmp/vod_progress_{job.id}.txt"
+
+        # Replace '-progress pipe:1' with the remote file path in the command.
+        cmd_str_remote = cmd_str.replace(
+            shlex.quote("-progress") + " " + shlex.quote("pipe:1"),
+            shlex.quote("-progress") + " " + shlex.quote(remote_progress),
+        )
+        # Fallback: if the build produced them unquoted (no shlex.quote), handle that too
+        if remote_progress not in cmd_str_remote:
+            import re as _re
+            cmd_str_remote = _re.sub(
+                r"-progress\s+pipe:1\b",
+                f"-progress {shlex.quote(remote_progress)}",
+                cmd_str,
+            )
+
+        # Run ffmpeg on remote (progress goes to file, stdout/stderr ignored for progress)
+        stdin, ffmpeg_stdout, ffmpeg_stderr = ssh.exec_command(cmd_str_remote, get_pty=False)
         stdin.close()
 
-        last_db_update = time.time()
-        for line in stdout:
-            line = line.strip()
-            if "out_time_ms=" in line:
-                try:
-                    val = int(line.split("=")[1])
-                    current_s = val / 1_000_000
-                    pct = min(100.0, current_s / duration * 100) if duration else 0.0
-                    now = time.time()
-                    if now - last_db_update >= 2.0:
-                        db.query(TranscodeJob).filter(TranscodeJob.id == job.id).update(
-                            {"progress": pct}
-                        )
-                        db.commit()
-                        last_db_update = now
-                except Exception:
-                    pass
+        # --- SFTP polling thread ---
+        _stop_poll = threading.Event()
 
-        exit_code = stdout.channel.recv_exit_status()
+        def _poll_progress() -> None:
+            last_db_update = time.time()
+            poll_sftp = ssh.open_sftp()
+            try:
+                while not _stop_poll.is_set():
+                    time.sleep(2)
+                    try:
+                        with poll_sftp.open(remote_progress, "r") as f:
+                            content = f.read().decode(errors="ignore")
+                    except Exception:
+                        continue
+
+                    # Progress file contains key=value lines; find last out_time_ms
+                    out_time_ms: int | None = None
+                    speed_val: float = 1.0
+                    for pline in content.splitlines():
+                        pline = pline.strip()
+                        if pline.startswith("out_time_ms="):
+                            try:
+                                out_time_ms = int(pline.split("=", 1)[1])
+                            except Exception:
+                                pass
+                        elif pline.startswith("speed="):
+                            try:
+                                speed_val = float(pline.split("=", 1)[1].rstrip("x")) or 1.0
+                            except Exception:
+                                pass
+
+                    if out_time_ms is not None and duration:
+                        try:
+                            current_s = out_time_ms / 1_000_000
+                            pct = min(100.0, current_s / duration * 100)
+                            remaining = duration - current_s
+                            eta = int(remaining / speed_val) if speed_val > 0 else None
+                            now = time.time()
+                            if now - last_db_update >= 1.9:
+                                # Check cancellation while we have a fresh DB hit
+                                fresh = (
+                                    db.query(TranscodeJob)
+                                    .filter(TranscodeJob.id == job.id)
+                                    .first()
+                                )
+                                if fresh and fresh.status == "cancelled":
+                                    # Signal the channel to die
+                                    ffmpeg_stdout.channel.close()
+                                    _stop_poll.set()
+                                    return
+                                db.query(TranscodeJob).filter(
+                                    TranscodeJob.id == job.id
+                                ).update({"progress": pct, "eta_seconds": eta})
+                                db.commit()
+                                last_db_update = now
+                        except Exception:
+                            db.rollback()
+            finally:
+                poll_sftp.close()
+
+        poll_thread = threading.Thread(target=_poll_progress, daemon=True)
+        poll_thread.start()
+
+        exit_code = ffmpeg_stdout.channel.recv_exit_status()
+
+        # Stop the polling thread
+        _stop_poll.set()
+        poll_thread.join(timeout=5)
+
+        # Read all stderr for log_output (available after process exits)
+        try:
+            stderr_raw = ffmpeg_stderr.read().decode(errors="ignore")
+        except Exception:
+            stderr_raw = ""
+        log_out = stderr_raw[-_MAX_LOG_BYTES:] if stderr_raw else None
 
         if exit_code == 0:
             # Download the output file back to local output path
@@ -1025,17 +1302,22 @@ def _run_remote(
                     "status": "completed",
                     "progress": 100.0,
                     "completed_at": datetime.now(tz=timezone.utc),
+                    "log_output": log_out,
                 }
             )
         else:
-            err = stderr.read().decode(errors="ignore")[-2000:]
+            err = stderr_raw[-10240:] if stderr_raw else ""
             db.query(TranscodeJob).filter(TranscodeJob.id == job.id).update(
-                {"status": "failed", "error_message": err or "Remote FFmpeg hatasi"}
+                {
+                    "status": "failed",
+                    "error_message": err or "Remote FFmpeg hatasi",
+                    "log_output": log_out,
+                }
             )
         db.commit()
 
-        # Cleanup remote temp files
-        cleanup_paths = [remote_input, remote_output]
+        # Cleanup remote temp files (including progress file)
+        cleanup_paths = [remote_input, remote_output, remote_progress]
         if remote_logo:
             cleanup_paths.append(remote_logo)
         for remote_path in cleanup_paths:
