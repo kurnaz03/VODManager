@@ -59,6 +59,11 @@ export const authService = {
     return res.data
   },
 
+  async updateProfile(data: { username?: string; email?: string }): Promise<UserMe> {
+    const res = await api.put<UserMe>('/auth/me', data)
+    return res.data
+  },
+
   isAuthenticated(): boolean {
     return !!localStorage.getItem('access_token')
   },

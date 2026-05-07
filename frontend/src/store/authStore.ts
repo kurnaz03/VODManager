@@ -8,6 +8,7 @@ interface AuthState {
   setAuthenticated: (val: boolean) => void
   logout: () => void
   clearAuth: () => void
+  updateUser: (partial: Partial<UserMe>) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -29,4 +30,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('refresh_token')
     set({ user: null, isAuthenticated: false })
   },
+
+  updateUser: (partial) => set((state) => ({
+    user: state.user ? { ...state.user, ...partial } : null,
+  })),
 }))

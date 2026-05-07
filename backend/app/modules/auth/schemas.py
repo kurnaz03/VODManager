@@ -147,3 +147,20 @@ class ChangePasswordRequest(BaseModel):
             raise ValueError("Sifreler eslesmiyor")
         return v
 
+
+class UserProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+    @field_validator("username")
+    @classmethod
+    def username_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Kullanici adi en az 3 karakter olmalidir")
+        if len(v) > 50:
+            raise ValueError("Kullanici adi en fazla 50 karakter olmalidir")
+        return v
+

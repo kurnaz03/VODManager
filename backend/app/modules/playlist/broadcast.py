@@ -58,7 +58,22 @@ def _build_concat_content_http(items: list[PlaylistItem]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _get_ffmpeg_args(playlist_id: int, concat_file: str, stream_dir: str, remote: bool = False) -> list[str]:
+def _check_server_has_gpu(client: paramiko.SSHClient) -> bool:
+    """Check if a remote server has NVIDIA GPU available for NVENC encoding."""
+    try:
+        out = _ssh_exec(client, "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo NO_GPU")
+        return bool(out.strip()) and "NO_GPU" not in out
+    except Exception:
+        return False
+
+
+def _get_ffmpeg_args(
+    playlist_id: int,
+    concat_file: str,
+    stream_dir: str,
+    remote: bool = False,
+    use_nvenc: bool = False,
+) -> list[str]:
     args = [
         "ffmpeg", "-y",
         "-fflags", "+genpts",
@@ -73,20 +88,42 @@ def _get_ffmpeg_args(playlist_id: int, concat_file: str, stream_dir: str, remote
         # Sync & timestamp params (critical for seamless concat transitions)
         "-vsync", "cfr",
         "-r", "25",
-        # Re-encode to normalize codec/fps/keyframe differences between videos
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "18",
-        "-maxrate", "4000k",
-        "-bufsize", "8000k",
-        "-g", "50",
-        "-keyint_min", "50",
-        "-bf", "3",
-        "-b_strategy", "2",
-        "-sc_threshold", "0",
-        "-profile:v", "high",
-        "-level", "4.1",
-        "-pix_fmt", "yuv420p",
+    ]
+    if use_nvenc:
+        # GPU encoding via NVIDIA NVENC — offloads CPU entirely
+        args += [
+            "-c:v", "h264_nvenc",
+            "-preset", "p4",
+            "-rc:v", "vbr",
+            "-cq:v", "23",
+            "-b:v", "4000k",
+            "-maxrate:v", "4000k",
+            "-bufsize:v", "8000k",
+            "-g", "50",
+            "-keyint_min", "50",
+            "-bf", "2",
+            "-profile:v", "high",
+            "-level:v", "4.1",
+            "-pix_fmt", "yuv420p",
+        ]
+    else:
+        # CPU encoding — ultrafast preset + CRF 23 reduces CPU ~50% vs veryfast/CRF 18
+        args += [
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-maxrate", "4000k",
+            "-bufsize", "8000k",
+            "-g", "50",
+            "-keyint_min", "50",
+            "-bf", "2",
+            "-sc_threshold", "0",
+            "-profile:v", "high",
+            "-level", "4.1",
+            "-pix_fmt", "yuv420p",
+            "-threads", "1",
+        ]
+    args += [
         "-map", "0:v:0",
         "-map", "0:a:0",
         "-c:a", "aac",
@@ -256,7 +293,8 @@ def start_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
             with sftp.file(concat_file, "w") as f:
                 f.write(concat_content)
             sftp.close()
-            args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir, remote=True)
+            use_nvenc = _check_server_has_gpu(client)
+            args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir, remote=True, use_nvenc=use_nvenc)
             log_path = f"{stream_dir}/ffmpeg.log"
             restart_script = _build_restart_script(args, log_path)
             remote_cmd = f"nohup bash -c {repr(restart_script)} > {log_path} 2>&1 & echo $!"

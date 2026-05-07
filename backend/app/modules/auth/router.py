@@ -15,6 +15,7 @@ from app.modules.auth.schemas import (
     AdminUserUpdate,
     AdminUserResponse,
     ChangePasswordRequest,
+    UserProfileUpdate,
 )
 
 router = APIRouter()
@@ -84,6 +85,15 @@ def change_password(
     user_id: int = Depends(get_current_user_id),
 ):
     return service.change_password(db, user_id, data)
+
+
+@router.put("/auth/me", response_model=UserMeResponse, tags=["auth"])
+def update_me(
+    data: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    return service.update_profile(db, user_id, data)
 
 
 # Admin user management

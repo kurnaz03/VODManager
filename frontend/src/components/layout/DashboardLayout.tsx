@@ -3,6 +3,7 @@ import { Bell, ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, Search, UserCir
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MaintenanceBanner from './MaintenanceBanner'
+import ProfileModal from './ProfileModal'
 import { useAuthStore } from '../../store/authStore'
 import api from '../../utils/api'
 import { useBrandingStore } from '../../store/brandingStore'
@@ -20,6 +21,7 @@ export default function DashboardLayout({ children }: Props) {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true')
 
@@ -169,6 +171,10 @@ export default function DashboardLayout({ children }: Props) {
                     <div className="absolute right-0 top-14 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                       <button
                         type="button"
+                        onClick={() => {
+                          setProfileModalOpen(true)
+                          setProfileOpen(false)
+                        }}
                         className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                       >
                         Profil
@@ -192,6 +198,7 @@ export default function DashboardLayout({ children }: Props) {
           </main>
         </div>
       </div>
+      <ProfileModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
     </div>
   )
 }

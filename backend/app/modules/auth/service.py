@@ -7,6 +7,7 @@ from app.modules.auth import repository
 from app.modules.auth.schemas import (
     InitialAdminCreate, LoginRequest, TokenResponse, UserMeResponse,
     AdminUserCreate, AdminUserUpdate, ChangePasswordRequest,
+    UserProfileUpdate,
 )
 from app.modules.settings.service import is_initial_admin_created, mark_initial_admin_created
 from app.modules.audit.service import log_event
@@ -296,4 +297,45 @@ def change_password(db: Session, user_id: int, data: ChangePasswordRequest) -> d
     db.add(user)
     db.commit()
     return {"message": "Sifre basariyla degistirildi"}
+
+
+def update_profile(db: Session, user_id: int, data: UserProfileUpdate) -> dict:
+    from app.modules.users.models import User
+    user = repository.get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanici bulunamadi")
+
+    if data.username is not None:
+        new_username = data.username.strip()
+        if new_username and new_username != user.username:
+            if repository.get_user_by_username(db, new_username):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bu kullanici adi zaten kullaniliyor",
+                )
+            user.username = new_username
+
+    if data.email is not None:
+        existing = repository.get_user_by_email(db, data.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bu email zaten kullaniliyor",
+            )
+        user.email = data.email
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    roles = repository.get_user_roles(db, user)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "status": user.status,
+        "roles": roles,
+        "created_at": user.created_at,
+        "last_login_at": user.last_login_at,
+    }
 
