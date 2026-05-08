@@ -398,7 +398,55 @@ INSTALL_STEPS: list[tuple[str, str]] = [
     ("Sistem guncelleniyor", "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"),
     ("Temel paketler kuruluyor", "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx python3 python3-venv ffmpeg redis-server"),
     ("yt-dlp kuruluyor", "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp"),
-    ("Uygulama dizinleri olusturuluyor", "mkdir -p /var/www/vod-manager/shared/movies /var/www/vod-manager/shared/series /var/www/vod-manager/shared/downloads /var/www/vod-manager/shared/logs && chmod -R 755 /var/www/vod-manager"),
+    ("Uygulama dizinleri olusturuluyor", "mkdir -p /var/www/vod-manager/shared/movies /var/www/vod-manager/shared/series /var/www/vod-manager/shared/downloads /var/www/vod-manager/shared/logs /var/www/vod-manager/shared/hls /var/www/vod-manager/shared/transcode && chmod -R 755 /var/www/vod-manager"),
+    (
+        "nginx HLS/VOD site config deploy ediliyor",
+        r"""cat > /etc/nginx/sites-available/vod-manager << 'NGINXEOF'
+server {
+    listen 80;
+    server_name _;
+
+    location /hls/ {
+        alias /var/www/vod-manager/shared/hls/;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+        }
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
+
+    location /streams/ {
+        alias /var/www/vod-manager/shared/hls/;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+        }
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
+
+    location /transcode/ {
+        alias /var/www/vod-manager/shared/transcode/;
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
+}
+NGINXEOF
+ln -sf /etc/nginx/sites-available/vod-manager /etc/nginx/sites-enabled/vod-manager && rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx""",
+    ),
+    (
+        "NVIDIA GPU driver kontrol ediliyor ve kuruluyor",
+        "if lspci | grep -qi nvidia; then "
+        "echo 'NVIDIA GPU tespit edildi, driver kuruluyor...' && "
+        "apt-get update -qq && "
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-driver-535 nvidia-utils-535 && "
+        "echo 'NVIDIA driver kuruldu' || "
+        "echo 'NVIDIA driver kurulamadi (reboot gerekebilir)'; "
+        "else "
+        "echo 'GPU bulunamadi, driver kurulumu atlaniyor'; "
+        "fi",
+    ),
 ]
 
 
