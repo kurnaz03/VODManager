@@ -728,9 +728,14 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist bulunamadi")
         _do_checks_and_record(db, user, request, item_id, "vod_channel", getattr(playlist, "name", None))
 
-        # Her zaman once yerel HLS dosyasini kontrol et (main server kendi HLS'ini olusturuyor olabilir)
+        # Yerel HLS: sadece playlist main-server veya local broadcast ise kullan.
+        # LB sunucusuna atanmissa (server_type=loadbalancer) stream_url proxy yolunu kullan.
         hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
-        if os.path.isfile(hls_path):
+        _is_lb_playlist = (
+            playlist.server is not None
+            and str(getattr(playlist.server, "server_type", "")) == "loadbalancer"
+        )
+        if not _is_lb_playlist and os.path.isfile(hls_path):
             with open(hls_path, "r") as f:
                 m3u8_content = f.read()
             hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/{playlist.id}/"
@@ -777,6 +782,7 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
             return PlainTextResponse(
                 content=rewritten,
                 media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"},
             )
 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD Channel stream bulunamadi")

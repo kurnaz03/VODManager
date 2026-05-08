@@ -23,6 +23,7 @@ export interface Playlist {
   status: string
   server_id: number | null
   server_name: string | null
+  server_type?: string | null
   current_item_index: number
   started_at: string | null
   total_duration_seconds: number

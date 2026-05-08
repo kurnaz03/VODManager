@@ -11,6 +11,7 @@ import {
   X,
   Loader2,
   ChevronDown,
+  Terminal,
 } from 'lucide-react'
 import { contentApi, Category, moviesApi, MovieContent } from '../../content/services/contentApi'
 import { transcodeApi, TranscodeProfile } from '../services/transcodeApi'
@@ -163,6 +164,85 @@ function PreviewModal({ jobId, onClose }: { jobId: number; onClose: () => void }
   )
 }
 
+// ── Log Modal ─────────────────────────────────────────────────────────────────
+
+function LogModal({ jobId, jobStatus, onClose }: { jobId: number; jobStatus: string; onClose: () => void }) {
+  const logsQ = useQuery({
+    queryKey: ['transcode-job-logs', jobId],
+    queryFn: () => transcodeJobApi.getLogs(jobId),
+    refetchInterval: jobStatus === 'transcoding' ? 5000 : false,
+  })
+
+  const data = logsQ.data
+  const hasError = data?.error_message && !data.error_message.startsWith('Onizleme hatasi')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-3xl rounded-2xl bg-slate-900 shadow-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Terminal size={15} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-200">FFmpeg Log</span>
+            <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+              Job #{jobId}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-white/10 p-1.5 text-white hover:bg-white/20 transition"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+          {logsQ.isLoading && (
+            <div className="flex items-center gap-2 text-slate-400 text-sm py-6 justify-center">
+              <Loader2 size={16} className="animate-spin" />
+              <span>Yukleniyor...</span>
+            </div>
+          )}
+
+          {/* Error message block */}
+          {hasError && (
+            <div className="rounded-xl bg-rose-950/60 border border-rose-700/50 p-3">
+              <p className="text-xs font-semibold text-rose-400 mb-1.5">Hata Mesaji</p>
+              <pre className="text-xs text-rose-300 whitespace-pre-wrap break-all font-mono leading-relaxed">
+                {data!.error_message}
+              </pre>
+            </div>
+          )}
+
+          {/* Log output block */}
+          {data && (
+            <div className="rounded-xl bg-slate-800 border border-slate-700 p-3">
+              <p className="text-xs font-semibold text-slate-400 mb-1.5">
+                FFmpeg Ciktisi
+                {jobStatus === 'transcoding' && (
+                  <span className="ml-2 text-blue-400 animate-pulse">• Canli</span>
+                )}
+              </p>
+              {data.log_output ? (
+                <pre className="text-xs text-slate-300 whitespace-pre-wrap break-all font-mono leading-relaxed">
+                  {data.log_output}
+                </pre>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  {jobStatus === 'queued' || jobStatus === 'pending'
+                    ? 'Transcode henuz baslamadi.'
+                    : 'Log ciktisi yok.'}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Clear Dropdown ─────────────────────────────────────────────────────────────
 
 type ClearAction = 'completed' | 'failed' | 'queued' | 'selected'
@@ -263,6 +343,7 @@ export default function TranscodeJobsPage() {
   const [pendingPreviewId, setPendingPreviewId] = useState<number | null>(null)
   const [seenPreviewing, setSeenPreviewing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [logJobId, setLogJobId] = useState<number | null>(null)
 
   // Multi-select state
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set())
@@ -576,6 +657,15 @@ export default function TranscodeJobsPage() {
       {/* Preview modal */}
       {previewJobId !== null && (
         <PreviewModal jobId={previewJobId} onClose={() => setPreviewJobId(null)} />
+      )}
+
+      {/* Log modal */}
+      {logJobId !== null && (
+        <LogModal
+          jobId={logJobId}
+          jobStatus={jobs.find((j) => j.id === logJobId)?.status ?? ''}
+          onClose={() => setLogJobId(null)}
+        />
       )}
 
       {/* Page Header */}
@@ -997,6 +1087,7 @@ export default function TranscodeJobsPage() {
                       onDelete={() => setConfirmDelete(job.id)}
                       onPreview={() => previewMut.mutate(job.id)}
                       onShowPreview={() => setPreviewJobId(job.id)}
+                      onShowLogs={() => setLogJobId(job.id)}
                       previewPending={pendingPreviewId === job.id}
                       previewLoading={previewMut.isPending && previewMut.variables === job.id}
                     />
@@ -1022,6 +1113,7 @@ function JobRow({
   onDelete,
   onPreview,
   onShowPreview,
+  onShowLogs,
   previewPending,
   previewLoading,
 }: {
@@ -1033,12 +1125,13 @@ function JobRow({
   onDelete: () => void
   onPreview: () => void
   onShowPreview: () => void
+  onShowLogs: () => void
   previewPending: boolean
   previewLoading: boolean
 }) {
   const canStart = job.status === 'queued' || job.status === 'paused' || job.status === 'failed'
   const canStop = job.status === 'transcoding'
-  const canPreview = (job.status === 'queued' || job.status === 'paused' || job.status === 'failed') && !previewPending
+  const canPreview = (job.status === 'queued' || job.status === 'paused' || job.status === 'failed' || job.status === 'completed') && !previewPending
   const isTranscoding = job.status === 'transcoding'
 
   return (
@@ -1125,7 +1218,7 @@ function JobRow({
             </span>
           )}
           {/* Show preview file */}
-          {(job.status === 'queued' || job.status === 'paused') && !previewPending && (
+          {(job.status === 'queued' || job.status === 'paused' || job.status === 'completed') && !previewPending && (
             <button
               onClick={onShowPreview}
               title="Onizleme goster"
@@ -1162,6 +1255,18 @@ function JobRow({
             disabled={isTranscoding}
           >
             <Trash2 size={14} />
+          </button>
+          {/* Log */}
+          <button
+            onClick={onShowLogs}
+            title="FFmpeg logunu goster"
+            className={`rounded-lg p-1.5 transition ${
+              job.status === 'failed'
+                ? 'text-rose-500 hover:bg-rose-50 hover:text-rose-600'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+            }`}
+          >
+            <Terminal size={14} />
           </button>
         </div>
       </td>

@@ -25,6 +25,7 @@ import AdminPage from '../../modules/admin/pages/AdminPage'
 import VpnClientsPage from '../../modules/vpn/pages/VpnClientsPage'
 import TvChannelsPage from '../../modules/tv/pages/TvChannelsPage'
 import BackupsPage from '../../modules/backups/pages/BackupsPage'
+import TorrentPage from '../../modules/torrent/pages/TorrentPage'
 
 type AppStatus = 'loading' | 'setup' | 'login' | 'dashboard'
 
@@ -103,6 +104,7 @@ function AppRouter() {
 
         {/* Content Management */}
         <Route path="/downloads" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><DownloadsPage /></AuthRoute>} />
+        <Route path="/torrent" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TorrentPage /></AuthRoute>} />
         <Route path="/movies" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><MoviesPage /></AuthRoute>} />
         <Route path="/series" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><SeriesPage /></AuthRoute>} />
         <Route path="/tv" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TvPage /></AuthRoute>} />

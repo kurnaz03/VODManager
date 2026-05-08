@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     def movies_uploads_path(self) -> Path:
         return self.shared_storage_path / "uploads" / "movies"
 
+    @property
+    def torrent_downloads_path(self) -> Path:
+        return Path("/var/www/vod-manager/shared/downloads/torrents")
+
     # ── Backup ──────────────────────────────────────────────────────────────
     BACKUP_DIR: str = "/var/backups/vod-manager/user-backups"
     UPLOADS_DIR: str = "/var/www/vod-manager/shared/uploads"

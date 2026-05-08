@@ -99,5 +99,6 @@ class TranscodeJobResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     error_message: str | None
+    log_output: str | None
     created_at: datetime
     updated_at: datetime | None

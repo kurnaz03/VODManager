@@ -73,6 +73,7 @@ def _get_ffmpeg_args(
     stream_dir: str,
     remote: bool = False,
     use_nvenc: bool = False,
+    copy_mode: bool = False,
 ) -> list[str]:
     args = [
         "ffmpeg", "-y",
@@ -89,7 +90,16 @@ def _get_ffmpeg_args(
         "-vsync", "cfr",
         "-r", "25",
     ]
-    if use_nvenc:
+    if copy_mode:
+        # Passthrough mode — zero CPU re-encoding.
+        # All source videos are already H.264/AAC from the same transcode profile,
+        # so codec parameters match and keyframes align with HLS segments.
+        args += [
+            "-c:v", "copy",
+            "-c:a", "copy",
+            "-copyts",
+        ]
+    elif use_nvenc:
         # GPU encoding via NVIDIA NVENC — offloads CPU entirely
         args += [
             "-c:v", "h264_nvenc",
@@ -123,16 +133,24 @@ def _get_ffmpeg_args(
             "-pix_fmt", "yuv420p",
             "-threads", "1",
         ]
+    if not copy_mode:
+        args += [
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "48000",
+            "-ac", "2",
+            "-async", "1",
+            "-avoid_negative_ts", "make_zero",
+            "-thread_queue_size", "512",
+        ]
+    else:
+        args += [
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+        ]
     args += [
-        "-map", "0:v:0",
-        "-map", "0:a:0",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-ar", "48000",
-        "-ac", "2",
-        "-async", "1",
-        "-avoid_negative_ts", "make_zero",
-        "-thread_queue_size", "512",
         "-f", "hls",
         "-hls_time", "4",
         "-hls_list_size", "30",
@@ -141,6 +159,23 @@ def _get_ffmpeg_args(
         f"{stream_dir}/stream.m3u8",
     ]
     return args
+
+
+def _can_use_copy_mode(items: list[PlaylistItem]) -> bool:
+    """Check if all items are pre-transcoded with the same profile (safe for -c:v copy)."""
+    if not items:
+        return False
+    # All items must have a transcode job (pre-encoded output)
+    job_ids = [i.transcode_job_id for i in items]
+    if any(jid is None for jid in job_ids):
+        return False
+    # All items must share the same transcode profile for identical codec params
+    profiles = set()
+    for item in items:
+        job = item.transcode_job
+        if job and job.transcode_profile_id:
+            profiles.add(job.transcode_profile_id)
+    return len(profiles) == 1
 
 
 def _build_restart_script(ffmpeg_args: list[str], log_path: str) -> str:
@@ -164,7 +199,10 @@ def _build_restart_script(ffmpeg_args: list[str], log_path: str) -> str:
 def _load_playlist(db: Session, playlist_id: int) -> Playlist:
     pl = (
         db.query(Playlist)
-        .options(joinedload(Playlist.items), joinedload(Playlist.server))
+        .options(
+            joinedload(Playlist.server),
+            joinedload(Playlist.items).joinedload(PlaylistItem.transcode_job),
+        )
         .filter(Playlist.id == playlist_id)
         .first()
     )
@@ -268,7 +306,8 @@ def start_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
         with open(concat_file, "w") as f:
             f.write(concat_content)
 
-        args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir)
+        use_copy = _can_use_copy_mode(items)
+        args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir, copy_mode=use_copy)
         log_path = f"{stream_dir}/ffmpeg.log"
         restart_script = _build_restart_script(args, log_path)
         proc = subprocess.Popen(
@@ -294,7 +333,8 @@ def start_broadcast(db: Session, playlist_id: int) -> dict[str, Any]:
                 f.write(concat_content)
             sftp.close()
             use_nvenc = _check_server_has_gpu(client)
-            args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir, remote=True, use_nvenc=use_nvenc)
+            use_copy = _can_use_copy_mode(items)
+            args = _get_ffmpeg_args(playlist_id, concat_file, stream_dir, remote=True, use_nvenc=use_nvenc, copy_mode=use_copy)
             log_path = f"{stream_dir}/ffmpeg.log"
             restart_script = _build_restart_script(args, log_path)
             remote_cmd = f"nohup bash -c {repr(restart_script)} > {log_path} 2>&1 & echo $!"

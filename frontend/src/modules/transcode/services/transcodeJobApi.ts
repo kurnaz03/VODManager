@@ -35,6 +35,7 @@ export interface TranscodeJob {
   started_at: string | null
   completed_at: string | null
   error_message: string | null
+  log_output: string | null
   created_at: string
   updated_at: string | null
 }
@@ -120,5 +121,9 @@ export const transcodeJobApi = {
   async previewFileBlob(id: number): Promise<string> {
     const r = await api.get(`/transcode-jobs/${id}/preview-file`, { responseType: 'blob' })
     return URL.createObjectURL(r.data)
+  },
+  async getLogs(id: number): Promise<{ log_output: string | null; error_message: string | null; status: string }> {
+    const r = await api.get(`/transcode-jobs/${id}/logs`)
+    return r.data
   },
 }

@@ -36,6 +36,7 @@ export default function DashboardLayout({ children }: Props) {
       radio: 'Radyo Kategorileri',
       bouquets: 'Bouquets',
       downloads: 'Downloader',
+      torrent: 'Torrent',
       users: 'Kullanicilar',
       settings: 'Ayarlar',
       backups: 'Yedekler',

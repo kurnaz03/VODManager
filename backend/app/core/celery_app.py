@@ -31,5 +31,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.modules.backups.tasks.scheduled_auto_backup",
         "schedule": crontab(hour=3, minute=0),
     },
+    "reset-stuck-transcode-jobs-every-ten-minutes": {
+        "task": "app.modules.transcode.tasks.reset_stuck_transcode_jobs",
+        "schedule": 600.0,
+    },
+    "torrent-progress-poll-every-five-seconds": {
+        "task": "app.modules.torrent.tasks.poll_torrent_progress",
+        "schedule": 5.0,
+    },
 }
-celery_app.autodiscover_tasks(["app.modules.servers", "app.modules.settings", "app.modules.downloads", "app.modules.transcode", "app.modules.admin", "app.modules.content", "app.modules.backups"])
+celery_app.autodiscover_tasks(["app.modules.servers", "app.modules.settings", "app.modules.downloads", "app.modules.transcode", "app.modules.admin", "app.modules.content", "app.modules.backups", "app.modules.torrent"])

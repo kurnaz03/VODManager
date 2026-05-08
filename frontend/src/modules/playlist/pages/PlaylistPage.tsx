@@ -764,8 +764,13 @@ function PlaylistListView({
                           {pl.description && (
                             <div className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">{pl.description}</div>
                           )}
-                          {si?.profile_name && !pl.description && (
+                          {!pl.description && si?.profile_name && (
                             <div className="text-xs text-slate-400 mt-0.5">{si.profile_name}</div>
+                          )}
+                          {pl.server_type === 'loadbalancer' && (
+                            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-600 uppercase mt-1 inline-block" title="Cache Disabled - Always Fresh Stream">
+                              No Cache
+                            </span>
                           )}
                         </div>
                       </td>

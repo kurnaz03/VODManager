@@ -225,7 +225,9 @@ def build_ffmpeg_cmd(
     # Hardware acceleration
     hw = profile.hardware_accel or ""
     hwaccel_type = getattr(profile, "hwaccel_type", None) or ""
-    if hw == "nvenc" or hwaccel_type == "cuda":
+    # Only apply hwaccel if hardware_accel is explicitly set (prevents stale hwaccel_type
+    # from forcing CUDA when hardware_accel has been cleared).
+    if hw == "nvenc" and hwaccel_type == "cuda":
         # Only apply -hwaccel cuda if the input codec is CUDA-decodable (h264/hevc).
         # AV1 and other codecs lack hardware decode on most GPUs and can cause ffmpeg to hang.
         # Always check the ORIGINAL local file for codec detection (source_override may be remote path).
@@ -235,9 +237,9 @@ def build_ffmpeg_cmd(
             cmd += ["-hwaccel", "cuda"]
         # If input is not CUDA-decodable (e.g. AV1), skip -hwaccel to avoid GPU hang.
         # h264_nvenc encoder still works without hardware-accelerated decode.
-    elif hw == "vaapi" or hwaccel_type == "vaapi":
+    elif hw == "vaapi" and hwaccel_type == "vaapi":
         cmd += ["-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi", "-vaapi_device", "/dev/dri/renderD128"]
-    elif hw == "qsv" or hwaccel_type == "qsv":
+    elif hw == "qsv" and hwaccel_type == "qsv":
         cmd += ["-hwaccel", "qsv"]
 
     # thread_queue_size (before input)
@@ -439,7 +441,7 @@ def build_ffmpeg_cmd(
             "p1": "ultrafast", "p2": "superfast", "p3": "veryfast",
             "p4": "fast", "p5": "medium", "p6": "slow", "p7": "veryslow",
         }
-        if hw == "nvenc" or hwaccel_type == "cuda":
+        if hw == "nvenc" and hwaccel_type == "cuda":
             if preset not in _NVENC_VALID:
                 preset = _X264_TO_NVENC.get(preset, "p4")
         else:

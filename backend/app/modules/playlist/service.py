@@ -161,7 +161,7 @@ def add_item(db: Session, playlist_id: int, payload: PlaylistItemAdd) -> dict[st
     )
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcode job bulunamadi")
-    if job.status != "completed":
+    if job.status not in ("completed", "archived"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sadece tamamlanmis joblar eklenebilir")
 
     # Check not already in this playlist
@@ -269,7 +269,7 @@ def list_completed_jobs_for_profile(db: Session, profile_id: int) -> list[dict[s
         )
         .filter(
             TranscodeJob.transcode_profile_id == profile_id,
-            TranscodeJob.status == "completed",
+            TranscodeJob.status.in_(["completed", "archived"]),
         )
         .order_by(TranscodeJob.id.desc())
         .all()

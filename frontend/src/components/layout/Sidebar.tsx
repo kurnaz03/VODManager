@@ -10,6 +10,7 @@ import {
   Layers3,
   LayoutDashboard,
   ListVideo,
+  Magnet,
   MonitorDot,
   MonitorPlay,
   Radio,
@@ -48,6 +49,7 @@ const groups = [
         icon: Wrench,
         children: [
           { to: '/downloads', label: 'Downloader', icon: Download },
+          { to: '/torrent', label: 'Torrent', icon: Magnet },
           { to: '/transcode', label: 'Transcode', icon: Sliders },
           { to: '/transcode-profiles', label: 'Transcode Profiller', icon: SlidersHorizontal },
           { to: '/playlists', label: 'VOD Channel', icon: ListVideo },
@@ -85,7 +87,7 @@ const groups = [
   },
 ]
 
-const ARACLAR_PATHS = ['/downloads', '/transcode', '/transcode-profiles', '/playlists']
+const ARACLAR_PATHS = ['/downloads', '/torrent', '/transcode', '/transcode-profiles', '/playlists']
 const MEDYA_PATHS = ['/movies', '/series', '/tv-channels', '/radio']
 const ORG_PATHS = ['/categories', '/bouquets']
 
