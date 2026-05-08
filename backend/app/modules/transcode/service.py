@@ -199,3 +199,49 @@ def update_logo(db: Session, profile_id: int, filename: str, content: bytes) -> 
     db.commit()
     db.refresh(profile)
     return _serialize(profile)
+
+
+def ensure_default_vod_profile(db: Session) -> dict[str, Any] | None:
+    """Create the recommended VOD channel transcode profile if it does not exist."""
+    existing = db.query(TranscodeProfile).filter(TranscodeProfile.name == "VOD Channel (HLS Ready)").first()
+    if existing:
+        return _serialize(existing)
+
+    data = {
+        "name": "VOD Channel (HLS Ready)",
+        "video_codec": "h264",
+        "video_bitrate": "4000k",
+        "video_maxrate": "4000k",
+        "video_bufsize": "8000k",
+        "video_crf": 23,
+        "video_width": 1920,
+        "video_height": 1080,
+        "video_fps": 25.0,
+        "video_profile": "high",
+        "video_level": "4.1",
+        "video_preset": "fast",
+        "video_tune": None,
+        "video_pixel_format": "yuv420p",
+        "video_gop_size": 50,
+        "video_b_frames": 2,
+        "sc_threshold": 0,
+        "audio_codec": "aac",
+        "audio_bitrate": "128k",
+        "audio_sample_rate": 48000,
+        "audio_channels": 2,
+        "output_format": "mp4",
+        "output_type": "channel_ready",
+        "container_format": "mp4",
+        "vsync_mode": "cfr",
+        "avoid_negative_ts": "make_zero",
+        "fflags_mode": "+genpts",
+        "movflags_faststart": True,
+        "is_default": False,
+    }
+
+    hidden_cat = _create_hidden_category(db, "VOD Channel (HLS Ready)")
+    profile = TranscodeProfile(**data, hidden_category_id=hidden_cat.id)
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return _serialize(profile)

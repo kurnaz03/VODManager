@@ -41,6 +41,15 @@ PREVIEW_DIR = Path("/tmp")
 
 # ── Transcode Profiles ────────────────────────────────────────────────────────
 
+@router.post("/default-vod", response_model=TranscodeProfileResponse, status_code=status.HTTP_201_CREATED)
+def create_default_vod_profile(db: Session = Depends(get_db)):
+    """Create the recommended VOD channel transcode profile (HLS-ready)."""
+    result = service.ensure_default_vod_profile(db)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Varsayilan profil zaten mevcut")
+    return result
+
+
 @router.get("", response_model=list[TranscodeProfileResponse])
 def list_profiles(db: Session = Depends(get_db)):
     return service.list_profiles(db)
@@ -127,6 +136,20 @@ def get_job_progress(job_id: int, db: Session = Depends(get_db)):
         "status": job.status,
         "progress": job.progress,
         "eta_seconds": job.eta_seconds,
+    }
+
+
+@job_router.get("/{job_id}/logs")
+def get_job_logs(job_id: int, db: Session = Depends(get_db)):
+    """Return log_output, error_message and status for a given job."""
+    from app.modules.transcode.models import TranscodeJob
+    job = db.query(TranscodeJob).filter(TranscodeJob.id == job_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job bulunamadi")
+    return {
+        "log_output": job.log_output,
+        "error_message": job.error_message,
+        "status": job.status,
     }
 
 

@@ -33,6 +33,7 @@ from app.api.v1.router import api_router
 from app.modules.stream.router import router as stream_router
 from app.modules.servers.service import ensure_main_server
 from app.modules.content.seed import ensure_default_categories
+from app.modules.transcode.service import ensure_default_vod_profile
 from app.modules.dashboard.geoip import load_csv as load_geoip_csv
 
 limiter = Limiter(key_func=get_remote_address)
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
         seed_roles(db)
         ensure_main_server(db)
         ensure_default_categories(db)
+        ensure_default_vod_profile(db)
     finally:
         db.close()
 
