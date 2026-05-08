@@ -22,6 +22,8 @@ from app.core.database import SessionLocal
 from app.modules.content.models import MovieContent, SeriesContent, SeriesSeason, SeriesEpisode
 from app.modules.torrent.models import TorrentDownload, TorrentCategory, TorrentStatus
 from app.modules.torrent.schemas import TorrentAddRequest, TMDBResult
+from app.core.security import decrypt_secret
+from app.modules.users.models import SystemSetting
 
 logger = logging.getLogger(__name__)
 
@@ -559,16 +561,27 @@ def get_torrent_files(torrent_id: int) -> list[dict]:
     return result
 
 
-async def tmdb_search(query: str) -> list[TMDBResult]:
-    """Search TMDB for movies matching query. Returns empty list if API key not set."""
-    if not settings.TMDB_API_KEY:
+async def tmdb_search(query: str, db: Session | None = None) -> list[TMDBResult]:
+    """Search TMDB for movies matching query. Uses DB-stored API key."""
+    api_key = None
+    language = "tr-TR"
+    if db is not None:
+        row = db.query(SystemSetting).filter(SystemSetting.key == "tmdb.api_key").first()
+        if row and row.value:
+            api_key = decrypt_secret(row.value)
+        lang_row = db.query(SystemSetting).filter(SystemSetting.key == "tmdb.language").first()
+        if lang_row and lang_row.value:
+            language = lang_row.value
+    if not api_key:
+        api_key = settings.TMDB_API_KEY or None
+    if not api_key:
         return []
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
-        "api_key": settings.TMDB_API_KEY,
+        "api_key": api_key,
         "query": query,
-        "language": "tr-TR",
+        "language": language,
         "page": 1,
     }
     async with httpx.AsyncClient(timeout=8.0) as client:

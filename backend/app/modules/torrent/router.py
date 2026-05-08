@@ -29,9 +29,9 @@ async def add_torrent_file(
 
 
 @router.get("/tmdb-search", response_model=list[TMDBResult], tags=["torrent"])
-async def tmdb_search(query: str = Query(min_length=2)):
+async def tmdb_search(query: str = Query(min_length=2), db: Session = Depends(get_db)):
     """Search TMDB for movie suggestions."""
-    return await service.tmdb_search(query)
+    return await service.tmdb_search(query, db)
 
 
 @router.get("", response_model=list[TorrentResponse], tags=["torrent"])
