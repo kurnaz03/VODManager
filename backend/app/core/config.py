@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     BACKUP_MIN_DISK_FREE_GB: float = 5.0
     RATE_LIMIT_RESTORE: str = "1/hour"
 
+    # ── External APIs ────────────────────────────────────────────────────────
+    TMDB_API_KEY: str = ""  # Get from https://www.themoviedb.org/settings/api
+
     @property
     def backup_dir_path(self) -> Path:
         return Path(self.BACKUP_DIR)

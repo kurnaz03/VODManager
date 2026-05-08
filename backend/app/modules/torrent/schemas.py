@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,7 @@ class TorrentAddRequest(BaseModel):
     name: str | None = Field(default=None, max_length=500)
     category: TorrentCategoryLiteral
     category_id: int | None = Field(default=None, ge=1)
+    no_seed: bool = Field(default=True, description="Indirme tamamlaninca seeding durdur")
 
 
 class TorrentResponse(BaseModel):
@@ -32,6 +33,7 @@ class TorrentResponse(BaseModel):
     save_path: str | None
     info_hash: str | None
     error_message: str | None
+    no_seed: bool
     created_at: datetime
     updated_at: datetime | None
 
@@ -41,3 +43,12 @@ class TorrentFileItem(BaseModel):
     path: str
     size: int
     progress: float
+
+
+class TMDBResult(BaseModel):
+    tmdb_id: int
+    title: str
+    original_title: str
+    year: Optional[int]
+    overview: str
+    poster_url: Optional[str]

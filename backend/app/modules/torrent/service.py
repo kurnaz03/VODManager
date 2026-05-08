@@ -13,19 +13,21 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException, status
+import httpx
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.modules.content.models import MovieCategory, MovieContent, SeriesCategory
+from app.modules.content.models import MovieContent, SeriesContent, SeriesSeason, SeriesEpisode
 from app.modules.torrent.models import TorrentDownload, TorrentCategory, TorrentStatus
-from app.modules.torrent.schemas import TorrentAddRequest
+from app.modules.torrent.schemas import TorrentAddRequest, TMDBResult
 
 logger = logging.getLogger(__name__)
 
 # ─── Torrent save directory ──────────────────────────────────────────────────
 TORRENT_SAVE_PATH = Path("/var/www/vod-manager/shared/downloads/torrents")
+TORRENT_FILES_PATH = TORRENT_SAVE_PATH / ".torrent_files"
 
 # ─── libtorrent availability ─────────────────────────────────────────────────
 try:
@@ -125,6 +127,16 @@ def _update_db_from_handle(db: Session, db_id: int, handle: Any) -> None:
     if s.download_rate > 0 and total and done < total:
         eta = int((total - done) / s.download_rate)
 
+    # Auto-stop seeding when no_seed=True and download finished
+    if record.no_seed and new_status == TorrentStatus.seeding and not paused:
+        try:
+            handle.set_upload_limit(0)  # Stop uploading
+            handle.pause()
+        except Exception:
+            pass
+        new_status = TorrentStatus.completed
+        paused = True
+
     record.status = new_status
     record.progress = progress
     record.download_speed = dl_speed if dl_speed > 0 else None
@@ -188,6 +200,45 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
                     db.commit()
                     logger.info("Torrent completed: registered MovieContent id=%s", movie.id)
 
+            elif record.category == TorrentCategory.series and record.category_id:
+                # Find or create SeriesContent for this category
+                series = db.query(SeriesContent).filter(
+                    SeriesContent.title == record.name,
+                    SeriesContent.category_id == record.category_id,
+                ).first()
+                if series is None:
+                    series = SeriesContent(
+                        title=record.name,
+                        category_id=record.category_id,
+                    )
+                    db.add(series)
+                    db.flush()
+
+                # Find or create Season 1
+                season = db.query(SeriesSeason).filter(
+                    SeriesSeason.series_id == series.id,
+                    SeriesSeason.season_number == 1,
+                ).first()
+                if season is None:
+                    season = SeriesSeason(series_id=series.id, season_number=1)
+                    db.add(season)
+                    db.flush()
+
+                # Count existing episodes for numbering
+                ep_count = db.query(SeriesEpisode).filter(
+                    SeriesEpisode.season_id == season.id
+                ).count()
+
+                episode = SeriesEpisode(
+                    season_id=season.id,
+                    episode_number=ep_count + 1,
+                    title=file_path.stem,
+                    file_path=str(file_path),
+                )
+                db.add(episode)
+                db.commit()
+                logger.info("Torrent completed: registered SeriesEpisode for series id=%s", series.id)
+
     except Exception as exc:
         logger.error("Error registering completed torrent id=%s: %s", record.id, exc)
         db.rollback()
@@ -201,6 +252,7 @@ def start_session_and_monitor() -> None:
 
     _get_or_create_session()
     TORRENT_SAVE_PATH.mkdir(parents=True, exist_ok=True)
+    TORRENT_FILES_PATH.mkdir(parents=True, exist_ok=True)
 
     # Resume active/paused torrents from DB
     db = SessionLocal()
@@ -216,6 +268,24 @@ def start_session_and_monitor() -> None:
                         h = _handles.get(record.id)
                         if h:
                             h.pause()
+                # Apply no_seed upload limit
+                if record.no_seed:
+                    with _lock:
+                        h = _handles.get(record.id)
+                        if h and h.is_valid():
+                            try:
+                                h.set_upload_limit(0)
+                            except Exception:
+                                pass
+            elif record.torrent_file_path:
+                tp = Path(record.torrent_file_path)
+                if tp.exists():
+                    _add_torrent_file_to_session(record.id, tp, str(record.save_path or TORRENT_SAVE_PATH))
+                    if record.status == TorrentStatus.paused:
+                        with _lock:
+                            h = _handles.get(record.id)
+                            if h:
+                                h.pause()
         logger.info("Resumed %d torrents from DB on startup", len(active_records))
     finally:
         db.close()
@@ -231,6 +301,19 @@ def _add_magnet_to_session(db_id: int, magnet: str, save_path: str) -> Any:
     params = lt.add_torrent_params()  # type: ignore[attr-defined]
     params.save_path = save_path
     handle = lt.add_magnet_uri(sess, magnet, params)  # type: ignore[attr-defined]
+    with _lock:
+        _handles[db_id] = handle
+    return handle
+
+
+def _add_torrent_file_to_session(db_id: int, torrent_path: Path, save_path: str) -> Any:
+    """Add a .torrent file to the libtorrent session."""
+    sess = _get_or_create_session()
+    ti = lt.torrent_info(str(torrent_path))  # type: ignore[attr-defined]
+    params = lt.add_torrent_params()  # type: ignore[attr-defined]
+    params.ti = ti
+    params.save_path = save_path
+    handle = sess.add_torrent(params)
     with _lock:
         _handles[db_id] = handle
     return handle
@@ -256,6 +339,7 @@ def _serialize(record: TorrentDownload) -> dict:
         "save_path": record.save_path,
         "info_hash": record.info_hash,
         "error_message": record.error_message,
+        "no_seed": record.no_seed if record.no_seed is not None else True,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
@@ -285,6 +369,7 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
         status=TorrentStatus.downloading,
         progress=0.0,
         save_path=str(TORRENT_SAVE_PATH),
+        no_seed=payload.no_seed,
     )
     db.add(record)
     db.commit()
@@ -292,7 +377,79 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
 
     try:
         handle = _add_magnet_to_session(record.id, payload.magnet_link, str(TORRENT_SAVE_PATH))
-        # Store info hash once available (async, may not be ready yet)
+        if payload.no_seed:
+            try:
+                handle.set_upload_limit(0)
+            except Exception:
+                pass
+    except Exception as exc:
+        record.status = TorrentStatus.error
+        record.error_message = str(exc)
+        db.add(record)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return _serialize(record)
+
+
+async def add_torrent_from_file(
+    db: Session,
+    file: UploadFile,
+    name: str | None,
+    category: str,
+    category_id: int | None,
+    no_seed: bool,
+) -> dict:
+    """Add a torrent from an uploaded .torrent file."""
+    _ensure_lt()
+
+    TORRENT_SAVE_PATH.mkdir(parents=True, exist_ok=True)
+    TORRENT_FILES_PATH.mkdir(parents=True, exist_ok=True)
+
+    # Save uploaded file
+    safe_name = Path(file.filename or "torrent.torrent").name
+    dest = TORRENT_FILES_PATH / safe_name
+    # Avoid overwriting by suffixing
+    counter = 1
+    while dest.exists():
+        dest = TORRENT_FILES_PATH / f"{dest.stem}_{counter}{dest.suffix}"
+        counter += 1
+
+    content = await file.read()
+    dest.write_bytes(content)
+
+    # Parse torrent info for display name
+    try:
+        ti = lt.torrent_info(str(dest))  # type: ignore[attr-defined]
+        display_name = name or ti.name() or dest.stem
+    except Exception as exc:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Gecersiz .torrent dosyasi: {exc}",
+        ) from exc
+
+    record = TorrentDownload(
+        name=display_name[:499],
+        torrent_file_path=str(dest),
+        category=TorrentCategory(category),
+        category_id=category_id,
+        status=TorrentStatus.downloading,
+        progress=0.0,
+        save_path=str(TORRENT_SAVE_PATH),
+        no_seed=no_seed,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    try:
+        handle = _add_torrent_file_to_session(record.id, dest, str(TORRENT_SAVE_PATH))
+        if no_seed:
+            try:
+                handle.set_upload_limit(0)
+            except Exception:
+                pass
     except Exception as exc:
         record.status = TorrentStatus.error
         record.error_message = str(exc)
@@ -338,9 +495,19 @@ def resume_torrent(db: Session, torrent_id: int) -> dict:
     if handle and handle.is_valid():
         handle.resume()
     elif record.magnet_link:
-        # Re-add if handle lost (e.g. after restart without proper recovery)
-        _add_magnet_to_session(torrent_id, record.magnet_link, str(record.save_path or TORRENT_SAVE_PATH))
-    
+        handle = _add_magnet_to_session(torrent_id, record.magnet_link, str(record.save_path or TORRENT_SAVE_PATH))
+    elif record.torrent_file_path:
+        tp = Path(record.torrent_file_path)
+        if tp.exists():
+            handle = _add_torrent_file_to_session(torrent_id, tp, str(record.save_path or TORRENT_SAVE_PATH))
+
+    # Re-apply no_seed upload limit
+    if handle and handle.is_valid() and record.no_seed:
+        try:
+            handle.set_upload_limit(0)
+        except Exception:
+            pass
+
     record.status = TorrentStatus.downloading
     db.add(record)
     db.commit()
@@ -391,6 +558,43 @@ def get_torrent_files(torrent_id: int) -> list[dict]:
             "progress": progress,
         })
     return result
+
+
+async def tmdb_search(query: str) -> list[TMDBResult]:
+    """Search TMDB for movies matching query. Returns empty list if API key not set."""
+    if not settings.TMDB_API_KEY:
+        return []
+
+    url = "https://api.themoviedb.org/3/search/movie"
+    params = {
+        "api_key": settings.TMDB_API_KEY,
+        "query": query,
+        "language": "tr-TR",
+        "page": 1,
+    }
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        try:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("TMDB search failed: %s", exc)
+            return []
+
+    results: list[TMDBResult] = []
+    for item in data.get("results", [])[:8]:
+        year_str = item.get("release_date", "")[:4]
+        year = int(year_str) if year_str.isdigit() else None
+        poster = item.get("poster_path")
+        results.append(TMDBResult(
+            tmdb_id=item["id"],
+            title=item.get("title", ""),
+            original_title=item.get("original_title", ""),
+            year=year,
+            overview=item.get("overview", ""),
+            poster_url=f"https://image.tmdb.org/t/p/w92{poster}" if poster else None,
+        ))
+    return results
 
 
 def update_torrent_progress_from_celery() -> None:

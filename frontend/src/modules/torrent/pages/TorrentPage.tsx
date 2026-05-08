@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -11,9 +11,11 @@ import {
   Pause,
   Play,
   RefreshCcw,
+  Search,
   Trash2,
+  Upload,
 } from 'lucide-react'
-import { torrentApi, TorrentItem, TorrentStatus } from '../services/torrentApi'
+import { torrentApi, TorrentItem, TorrentStatus, TMDBResult } from '../services/torrentApi'
 import { contentApi, Category } from '../../content/services/contentApi'
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -85,26 +87,140 @@ function TorrentFileList({ torrentId }: { torrentId: number }) {
   )
 }
 
+// ─── TMDB Autocomplete ────────────────────────────────────────────────────────
+
+function TMDBAutocomplete({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (title: string) => void
+}) {
+  const [query, setQuery] = useState(value)
+  const [open, setOpen] = useState(false)
+  const [results, setResults] = useState<TMDBResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const search = useCallback(async (q: string) => {
+    if (q.trim().length < 2) {
+      setResults([])
+      setOpen(false)
+      return
+    }
+    setSearching(true)
+    try {
+      const data = await torrentApi.tmdbSearch(q)
+      setResults(data)
+      setOpen(data.length > 0)
+    } catch {
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => search(query), 500)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [query, search])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const select = (result: TMDBResult) => {
+    const title = result.title || result.original_title
+    setQuery(title)
+    onChange(title)
+    setOpen(false)
+    setResults([])
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            onChange(e.target.value)
+          }}
+          placeholder="Film / dizi adi yaz, TMDB'den oner gelir..."
+          className="h-11 w-full rounded-2xl border border-slate-200 px-4 pr-10 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+        />
+        <div className="pointer-events-none absolute right-3 text-slate-400">
+          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+        </div>
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+          {results.map((r) => (
+            <button
+              key={r.tmdb_id}
+              type="button"
+              onClick={() => select(r)}
+              className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition hover:bg-slate-50"
+            >
+              {r.poster_url ? (
+                <img src={r.poster_url} alt="" className="h-12 w-8 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-12 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                  <FileVideo size={14} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium text-slate-900">{r.title}</div>
+                {r.original_title && r.original_title !== r.title && (
+                  <div className="truncate text-xs text-slate-500">{r.original_title}</div>
+                )}
+                <div className="text-xs text-slate-400">{r.year ?? '?'}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
+
+type InputMode = 'magnet' | 'file'
 
 export default function TorrentPage() {
   const qc = useQueryClient()
 
+  // Form state
+  const [inputMode, setInputMode] = useState<InputMode>('magnet')
   const [magnetLink, setMagnetLink] = useState('')
+  const [torrentFile, setTorrentFile] = useState<File | null>(null)
   const [torrentName, setTorrentName] = useState('')
   const [category, setCategory] = useState<'movie' | 'series'>('movie')
   const [categoryId, setCategoryId] = useState<number | ''>('')
+  const [noSeed, setNoSeed] = useState(true) // default: seeding OFF
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const [removeFiles, setRemoveFiles] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Movie categories for dropdown
+  // Movie categories
   const { data: movieCats = [] } = useQuery<Category[]>({
     queryKey: ['movie-categories'],
     queryFn: () => contentApi.listCategories('movies'),
   })
 
-  // Series categories for dropdown
+  // Series categories
   const { data: seriesCats = [] } = useQuery<Category[]>({
     queryKey: ['series-categories'],
     queryFn: () => contentApi.listCategories('series'),
@@ -119,12 +235,22 @@ export default function TorrentPage() {
     refetchInterval: 5000,
   })
 
-  const addMutation = useMutation({
+  const addMagnetMutation = useMutation({
     mutationFn: torrentApi.add,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['torrents'] })
       setMagnetLink('')
       setTorrentName('')
+    },
+  })
+
+  const addFileMutation = useMutation({
+    mutationFn: torrentApi.addFile,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['torrents'] })
+      setTorrentFile(null)
+      setTorrentName('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
     },
   })
 
@@ -147,16 +273,30 @@ export default function TorrentPage() {
   })
 
   const handleAdd = () => {
-    if (!magnetLink.trim()) return
-    addMutation.mutate({
-      magnet_link: magnetLink.trim(),
-      name: torrentName.trim() || undefined,
-      category,
-      category_id: categoryId !== '' ? Number(categoryId) : undefined,
-    })
+    if (inputMode === 'magnet') {
+      if (!magnetLink.trim()) return
+      addMagnetMutation.mutate({
+        magnet_link: magnetLink.trim(),
+        name: torrentName.trim() || undefined,
+        category,
+        category_id: categoryId !== '' ? Number(categoryId) : undefined,
+        no_seed: noSeed,
+      })
+    } else {
+      if (!torrentFile) return
+      const fd = new FormData()
+      fd.append('file', torrentFile)
+      if (torrentName.trim()) fd.append('name', torrentName.trim())
+      fd.append('category', category)
+      if (categoryId !== '') fd.append('category_id', String(categoryId))
+      fd.append('no_seed', String(noSeed))
+      addFileMutation.mutate(fd)
+    }
   }
 
-  const isAdding = addMutation.isPending
+  const isAdding = addMagnetMutation.isPending || addFileMutation.isPending
+  const addError = addMagnetMutation.error || addFileMutation.error
+  const canAdd = inputMode === 'magnet' ? !!magnetLink.trim() : !!torrentFile
 
   return (
     <div className="space-y-6">
@@ -167,30 +307,77 @@ export default function TorrentPage() {
           <h2 className="text-base font-semibold text-slate-900">Yeni Torrent Ekle</h2>
         </div>
 
-        <div className="space-y-4">
-          {/* Magnet link input */}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Magnet Link</label>
-            <input
-              type="text"
-              value={magnetLink}
-              onChange={(e) => setMagnetLink(e.target.value)}
-              placeholder="magnet:?xt=urn:btih:..."
-              className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-            />
-          </div>
+        {/* Input mode tabs */}
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setInputMode('magnet')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+              inputMode === 'magnet'
+                ? 'bg-blue-500 text-white'
+                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Magnet size={14} />
+            Magnet Link
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputMode('file')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+              inputMode === 'file'
+                ? 'bg-blue-500 text-white'
+                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Upload size={14} />
+            .torrent Dosyasi
+          </button>
+        </div>
 
-          {/* Optional name */}
+        <div className="space-y-4">
+          {/* Magnet link or file upload */}
+          {inputMode === 'magnet' ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Magnet Link</label>
+              <input
+                type="text"
+                value={magnetLink}
+                onChange={(e) => setMagnetLink(e.target.value)}
+                placeholder="magnet:?xt=urn:btih:..."
+                className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">.torrent Dosyasi</label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-500"
+              >
+                <Upload size={20} />
+                <span className="text-sm">
+                  {torrentFile ? torrentFile.name : 'Dosya sec veya surukle'}
+                </span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".torrent"
+                className="hidden"
+                onChange={(e) => setTorrentFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          )}
+
+          {/* Name with TMDB autocomplete */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Isim <span className="text-slate-400">(opsiyonel)</span>
+              Isim <span className="text-slate-400">(opsiyonel — TMDB'den ara)</span>
             </label>
-            <input
-              type="text"
+            <TMDBAutocomplete
               value={torrentName}
-              onChange={(e) => setTorrentName(e.target.value)}
-              placeholder="Torrent adi (bos birakirsaniz otomatik alinir)"
-              className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              onChange={setTorrentName}
             />
           </div>
 
@@ -214,14 +401,15 @@ export default function TorrentPage() {
             {/* Sub-category */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Alt Kategori <span className="text-slate-400">(opsiyonel)</span>
+                {category === 'series' ? 'Dizi Sec' : 'Film Kategorisi'}{' '}
+                <span className="text-slate-400">(opsiyonel)</span>
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
-                <option value="">-- Kategori Sec --</option>
+                <option value="">-- {category === 'series' ? 'Dizi Sec' : 'Kategori Sec'} --</option>
                 {activeCats.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -231,17 +419,40 @@ export default function TorrentPage() {
             </div>
           </div>
 
-          {addMutation.isError && (
+          {/* Seeding toggle */}
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={!noSeed}
+                onChange={(e) => setNoSeed(!e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="peer h-5 w-9 rounded-full bg-slate-200 transition peer-checked:bg-blue-500 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-4" />
+            </label>
+            <div>
+              <div className="text-sm font-medium text-slate-700">
+                Indirdikten sonra paylasma (seed etme)
+              </div>
+              <div className="text-xs text-slate-400">
+                {noSeed
+                  ? 'Seeding kapali — indirme tamamlaninca otomatik durur'
+                  : 'Seeding acik — diger kullanicilara paylasim yapilir'}
+              </div>
+            </div>
+          </div>
+
+          {addError && (
             <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
               <AlertCircle size={15} />
-              {(addMutation.error as Error)?.message || 'Hata olustu'}
+              {(addError as Error)?.message || 'Hata olustu'}
             </div>
           )}
 
           <button
             type="button"
             onClick={handleAdd}
-            disabled={isAdding || !magnetLink.trim()}
+            disabled={isAdding || !canAdd}
             className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-6 text-sm font-medium text-white transition hover:bg-blue-600 disabled:opacity-50"
           >
             {isAdding ? <Loader2 size={15} className="animate-spin" /> : <Magnet size={15} />}
@@ -290,7 +501,6 @@ export default function TorrentPage() {
 
               return (
                 <div key={t.id} className="px-6 py-4">
-                  {/* Row */}
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
                     {/* Info */}
                     <div className="min-w-0 flex-1">
@@ -302,9 +512,12 @@ export default function TorrentPage() {
                         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">
                           {t.category === 'movie' ? 'Film' : 'Dizi'}
                         </span>
-                        {isDone && (
-                          <CheckCircle2 size={15} className="text-emerald-500" />
+                        {t.no_seed && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-600">
+                            seed yok
+                          </span>
                         )}
+                        {isDone && <CheckCircle2 size={15} className="text-emerald-500" />}
                       </div>
 
                       {/* Progress bar */}
@@ -319,7 +532,15 @@ export default function TorrentPage() {
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className={`h-full rounded-full transition-all ${isDone ? 'bg-emerald-500' : isError ? 'bg-rose-400' : isPaused ? 'bg-slate-400' : 'bg-blue-500'}`}
+                            className={`h-full rounded-full transition-all ${
+                              isDone
+                                ? 'bg-emerald-500'
+                                : isError
+                                ? 'bg-rose-400'
+                                : isPaused
+                                ? 'bg-slate-400'
+                                : 'bg-blue-500'
+                            }`}
                             style={{ width: `${Math.min(t.progress, 100)}%` }}
                           />
                         </div>

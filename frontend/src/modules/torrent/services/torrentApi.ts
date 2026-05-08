@@ -20,6 +20,7 @@ export interface TorrentItem {
   save_path: string | null
   info_hash: string | null
   error_message: string | null
+  no_seed: boolean
   created_at: string
   updated_at: string | null
 }
@@ -29,6 +30,7 @@ export interface TorrentAddPayload {
   name?: string
   category: TorrentCategory
   category_id?: number | null
+  no_seed?: boolean
 }
 
 export interface TorrentFileItem {
@@ -38,9 +40,23 @@ export interface TorrentFileItem {
   progress: number
 }
 
+export interface TMDBResult {
+  tmdb_id: number
+  title: string
+  original_title: string
+  year: number | null
+  overview: string
+  poster_url: string | null
+}
+
 export const torrentApi = {
   add: (payload: TorrentAddPayload) =>
     api.post<TorrentItem>('/torrent', payload).then((r) => r.data),
+
+  addFile: (formData: FormData) =>
+    api.post<TorrentItem>('/torrent/add-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
 
   list: () =>
     api.get<TorrentItem[]>('/torrent').then((r) => r.data),
@@ -56,4 +72,7 @@ export const torrentApi = {
 
   files: (id: number) =>
     api.get<TorrentFileItem[]>(`/torrent/${id}/files`).then((r) => r.data),
+
+  tmdbSearch: (query: string) =>
+    api.get<TMDBResult[]>('/torrent/tmdb-search', { params: { query } }).then((r) => r.data),
 }
