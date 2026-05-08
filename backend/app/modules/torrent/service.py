@@ -215,11 +215,24 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
                     db.add(series)
                     db.flush()
 
-                # Find or create Season 1
-                season = db.query(SeriesSeason).filter(
-                    SeriesSeason.series_id == series.id,
-                    SeriesSeason.season_number == 1,
-                ).first()
+                # Use season_id if explicitly provided, else find/create Season 1
+                if record.season_id:
+                    season = db.query(SeriesSeason).filter(
+                        SeriesSeason.id == record.season_id,
+                        SeriesSeason.series_id == series.id,
+                    ).first()
+                    if season is None:
+                        # season_id may not match series — fallback to season 1
+                        season = db.query(SeriesSeason).filter(
+                            SeriesSeason.series_id == series.id,
+                            SeriesSeason.season_number == 1,
+                        ).first()
+                else:
+                    season = db.query(SeriesSeason).filter(
+                        SeriesSeason.series_id == series.id,
+                        SeriesSeason.season_number == 1,
+                    ).first()
+
                 if season is None:
                     season = SeriesSeason(series_id=series.id, season_number=1)
                     db.add(season)
@@ -238,7 +251,7 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
                 )
                 db.add(episode)
                 db.commit()
-                logger.info("Torrent completed: registered SeriesEpisode for series id=%s", series.id)
+                logger.info("Torrent completed: registered SeriesEpisode for series id=%s season_id=%s", series.id, season.id)
 
     except Exception as exc:
         logger.error("Error registering completed torrent id=%s: %s", record.id, exc)
@@ -341,6 +354,7 @@ def _serialize(record: TorrentDownload) -> dict:
         "info_hash": record.info_hash,
         "error_message": record.error_message,
         "no_seed": record.no_seed if record.no_seed is not None else True,
+        "season_id": record.season_id,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
@@ -367,6 +381,7 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
         magnet_link=payload.magnet_link,
         category=TorrentCategory(payload.category),
         category_id=payload.category_id,
+        season_id=payload.season_id,
         status=TorrentStatus.downloading,
         progress=0.0,
         save_path=str(TORRENT_SAVE_PATH),
@@ -399,6 +414,7 @@ async def add_torrent_from_file(
     name: str | None,
     category: str,
     category_id: int | None,
+    season_id: int | None,
     no_seed: bool,
 ) -> dict:
     """Add a torrent from an uploaded .torrent file."""
@@ -435,6 +451,7 @@ async def add_torrent_from_file(
         torrent_file_path=str(dest),
         category=TorrentCategory(category),
         category_id=category_id,
+        season_id=season_id,
         status=TorrentStatus.downloading,
         progress=0.0,
         save_path=str(TORRENT_SAVE_PATH),

@@ -40,5 +40,6 @@ class TorrentDownload(Base):
     info_hash = Column(String(100), nullable=True, index=True)
     error_message = Column(Text, nullable=True)
     no_seed = Column(Boolean, nullable=False, default=True)
+    season_id = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

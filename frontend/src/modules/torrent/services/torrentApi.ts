@@ -10,6 +10,7 @@ export interface TorrentItem {
   torrent_file_path: string | null
   category: TorrentCategory
   category_id: number | null
+  season_id: number | null
   status: TorrentStatus
   progress: number
   download_speed: number | null
@@ -30,6 +31,7 @@ export interface TorrentAddPayload {
   name?: string
   category: TorrentCategory
   category_id?: number | null
+  season_id?: number | null
   no_seed?: boolean
 }
 
