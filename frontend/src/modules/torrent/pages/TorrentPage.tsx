@@ -16,7 +16,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { torrentApi, TorrentItem, TorrentStatus, TMDBResult } from '../services/torrentApi'
-import { contentApi, Category } from '../../content/services/contentApi'
+import { contentApi, Category, seriesApi, SeriesContent } from '../../content/services/contentApi'
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
@@ -220,13 +220,12 @@ export default function TorrentPage() {
     queryFn: () => contentApi.listCategories('movies'),
   })
 
-  // Series categories
-  const { data: seriesCats = [] } = useQuery<Category[]>({
-    queryKey: ['series-categories'],
-    queryFn: () => contentApi.listCategories('series'),
+  // All existing series (for picking which series to add episodes into)
+  const { data: seriesList = [] } = useQuery<SeriesContent[]>({
+    queryKey: ['series-list-all'],
+    queryFn: () => seriesApi.list(),
+    enabled: category === 'series',
   })
-
-  const activeCats = category === 'movie' ? movieCats : seriesCats
 
   // Poll torrent list every 5 seconds
   const { data: torrents = [], isLoading } = useQuery<TorrentItem[]>({
@@ -394,14 +393,14 @@ export default function TorrentPage() {
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 <option value="movie">Film</option>
-                <option value="series">Dizi</option>
+                <option value="series">Series</option>
               </select>
             </div>
 
             {/* Sub-category */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                {category === 'series' ? 'Dizi Sec' : 'Film Kategorisi'}{' '}
+                {category === 'series' ? 'Series Sec' : 'Film Kategorisi'}{' '}
                 <span className="text-slate-400">(opsiyonel)</span>
               </label>
               <select
@@ -409,12 +408,18 @@ export default function TorrentPage() {
                 onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
-                <option value="">-- {category === 'series' ? 'Dizi Sec' : 'Kategori Sec'} --</option>
-                {activeCats.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                <option value="">-- {category === 'series' ? 'Series Sec' : 'Kategori Sec'} --</option>
+                {category === 'series'
+                  ? seriesList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                      </option>
+                    ))
+                  : movieCats.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
               </select>
             </div>
           </div>
@@ -510,7 +515,7 @@ export default function TorrentPage() {
                           {statusLabels[t.status]}
                         </span>
                         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">
-                          {t.category === 'movie' ? 'Film' : 'Dizi'}
+                          {t.category === 'movie' ? 'Film' : 'Series'}
                         </span>
                         {t.no_seed && (
                           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-600">

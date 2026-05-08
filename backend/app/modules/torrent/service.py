@@ -201,15 +201,14 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
                     logger.info("Torrent completed: registered MovieContent id=%s", movie.id)
 
             elif record.category == TorrentCategory.series and record.category_id:
-                # Find or create SeriesContent for this category
+                # Find the selected SeriesContent by its ID (category_id stores series.id)
                 series = db.query(SeriesContent).filter(
-                    SeriesContent.title == record.name,
-                    SeriesContent.category_id == record.category_id,
+                    SeriesContent.id == record.category_id,
                 ).first()
                 if series is None:
+                    # Fallback: create a new series entry
                     series = SeriesContent(
                         title=record.name,
-                        category_id=record.category_id,
                     )
                     db.add(series)
                     db.flush()
