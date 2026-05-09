@@ -16,7 +16,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { torrentApi, TorrentItem, TorrentStatus, TMDBResult } from '../services/torrentApi'
-import { contentApi, Category, seriesApi, SeriesContent, Season } from '../../content/services/contentApi'
+import { contentApi, Category, seriesApi, SeriesContent } from '../../content/services/contentApi'
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
@@ -208,7 +208,8 @@ export default function TorrentPage() {
   const [torrentName, setTorrentName] = useState('')
   const [category, setCategory] = useState<'movie' | 'series'>('movie')
   const [categoryId, setCategoryId] = useState<number | ''>('')
-  const [seasonId, setSeasonId] = useState<number | ''>('')
+  const [seasonNumber, setSeasonNumber] = useState<number | ''>('')
+  const [episodeNumber, setEpisodeNumber] = useState<number | ''>('')
   const [noSeed, setNoSeed] = useState(true) // default: seeding OFF
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
@@ -226,14 +227,6 @@ export default function TorrentPage() {
     queryKey: ['series-list-all'],
     queryFn: () => seriesApi.list(),
     enabled: category === 'series',
-  })
-
-  // Seasons for the selected series
-  const selectedSeriesId = category === 'series' && categoryId !== '' ? Number(categoryId) : null
-  const { data: seasons = [], isLoading: seasonsLoading } = useQuery<Season[]>({
-    queryKey: ['series-seasons', selectedSeriesId],
-    queryFn: () => seriesApi.listSeasons(selectedSeriesId!),
-    enabled: selectedSeriesId !== null,
   })
 
   // Poll torrent list every 5 seconds
@@ -288,7 +281,8 @@ export default function TorrentPage() {
         name: torrentName.trim() || undefined,
         category,
         category_id: categoryId !== '' ? Number(categoryId) : undefined,
-        season_id: seasonId !== '' ? Number(seasonId) : undefined,
+        season_number: seasonNumber !== '' ? Number(seasonNumber) : undefined,
+        episode_number: episodeNumber !== '' ? Number(episodeNumber) : undefined,
         no_seed: noSeed,
       })
     } else {
@@ -298,7 +292,8 @@ export default function TorrentPage() {
       if (torrentName.trim()) fd.append('name', torrentName.trim())
       fd.append('category', category)
       if (categoryId !== '') fd.append('category_id', String(categoryId))
-      if (seasonId !== '') fd.append('season_id', String(seasonId))
+      if (seasonNumber !== '') fd.append('season_number', String(seasonNumber))
+      if (episodeNumber !== '') fd.append('episode_number', String(episodeNumber))
       fd.append('no_seed', String(noSeed))
       addFileMutation.mutate(fd)
     }
@@ -306,7 +301,12 @@ export default function TorrentPage() {
 
   const isAdding = addMagnetMutation.isPending || addFileMutation.isPending
   const addError = addMagnetMutation.error || addFileMutation.error
-  const canAdd = inputMode === 'magnet' ? !!magnetLink.trim() : !!torrentFile
+  const hasSource = inputMode === 'magnet' ? !!magnetLink.trim() : !!torrentFile
+  const hasRequiredTarget =
+    category === 'movie'
+      ? categoryId !== ''
+      : categoryId !== '' && seasonNumber !== ''
+  const canAdd = hasSource && hasRequiredTarget
 
   return (
     <div className="space-y-6">
@@ -391,7 +391,7 @@ export default function TorrentPage() {
             />
           </div>
 
-          <div className={`grid grid-cols-1 gap-4 ${category === 'series' && categoryId !== '' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          <div className={`grid grid-cols-1 gap-4 ${category === 'series' && categoryId !== '' ? 'lg:grid-cols-4 sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
             {/* Category type */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">Kategori Tipi</label>
@@ -400,7 +400,8 @@ export default function TorrentPage() {
                 onChange={(e) => {
                   setCategory(e.target.value as 'movie' | 'series')
                   setCategoryId('')
-                  setSeasonId('')
+                  setSeasonNumber('')
+                  setEpisodeNumber('')
                 }}
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
@@ -412,14 +413,14 @@ export default function TorrentPage() {
             {/* Sub-category */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                {category === 'series' ? 'Dizi Sec' : 'Film Kategorisi'}{' '}
-                <span className="text-slate-400">(opsiyonel)</span>
+                {category === 'series' ? 'Dizi Sec' : 'Film Kategorisi'}
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => {
                   setCategoryId(e.target.value === '' ? '' : Number(e.target.value))
-                  setSeasonId('')
+                  setSeasonNumber('')
+                  setEpisodeNumber('')
                 }}
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
@@ -438,43 +439,35 @@ export default function TorrentPage() {
               </select>
             </div>
 
-            {/* Season dropdown — only when a series is selected */}
+            {/* Manual season / episode inputs — only when a series is selected */}
             {category === 'series' && categoryId !== '' && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Sezon Sec{' '}
-                  <span className="text-slate-400">(opsiyonel)</span>
-                </label>
-                {seasonsLoading ? (
-                  <div className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-400">
-                    <Loader2 size={13} className="animate-spin" />
-                    Sezonlar yukleniyor...
-                  </div>
-                ) : (
-                  <select
-                    value={seasonId}
-                    onChange={(e) => setSeasonId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  >
-                    <option value="">-- Sezon Sec --</option>
-                    {seasons.length === 0 ? (
-                      <option value="new" disabled>
-                        (Sezon yok — otomatik Sezon 1 olusturulur)
-                      </option>
-                    ) : (
-                      seasons
-                        .slice()
-                        .sort((a, b) => a.season_number - b.season_number)
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.title ? s.title : `Sezon ${s.season_number}`}
-                            {s.episode_count > 0 ? ` (${s.episode_count} bolum)` : ''}
-                          </option>
-                        ))
-                    )}
-                  </select>
-                )}
-              </div>
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Sezon No</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={seasonNumber}
+                    onChange={(e) => setSeasonNumber(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Ornek: 1"
+                    className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Bolum No</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={episodeNumber}
+                    onChange={(e) => setEpisodeNumber(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Bos = otomatik numaralama"
+                    className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Bos birakirsan torrent icindeki video dosyalari Bolum 1, 2, 3 olarak kaydedilir.
+                  </p>
+                </div>
+              </>
             )}
           </div>
 
@@ -571,6 +564,11 @@ export default function TorrentPage() {
                         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">
                           {t.category === 'movie' ? 'Film' : 'Series'}
                         </span>
+                        {t.category === 'series' && t.season_number != null && (
+                          <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs text-violet-700">
+                            S{t.season_number}{t.episode_number != null ? ` • B${t.episode_number}` : ' • Tum Sezon'}
+                          </span>
+                        )}
                         {t.no_seed && (
                           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-600">
                             seed yok

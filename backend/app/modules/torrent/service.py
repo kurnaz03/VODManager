@@ -8,6 +8,7 @@ active/paused DB records are re-added to the session to survive restarts.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.modules.content.models import MovieContent, SeriesContent, SeriesSeason, SeriesEpisode
+from app.modules.content.models import MovieCategory, MovieContent, SeriesContent, SeriesSeason, SeriesEpisode
 from app.modules.torrent.models import TorrentDownload, TorrentCategory, TorrentStatus
 from app.modules.torrent.schemas import TorrentAddRequest, TMDBResult
 from app.core.security import decrypt_secret
@@ -61,6 +62,78 @@ def _get_or_create_session() -> Any:
         _session = lt.session({"listen_interfaces": "0.0.0.0:6881"})
         logger.info("libtorrent session initialized")
     return _session
+
+
+def _natural_sort_key(value: str) -> list[Any]:
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value)]
+
+
+def _ensure_movie_category(db: Session, category_id: int) -> MovieCategory:
+    category = db.query(MovieCategory).filter(MovieCategory.id == category_id).first()
+    if category is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Film kategorisi bulunamadi")
+    return category
+
+
+def _ensure_series(db: Session, series_id: int) -> SeriesContent:
+    series = db.query(SeriesContent).filter(SeriesContent.id == series_id).first()
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dizi bulunamadi")
+    return series
+
+
+def _validate_target(
+    db: Session,
+    category: TorrentCategory,
+    category_id: int | None,
+    season_number: int | None,
+    episode_number: int | None,
+) -> None:
+    if category == TorrentCategory.movie:
+        if not category_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Film torrent icin kategori secilmelidir")
+        _ensure_movie_category(db, category_id)
+        return
+
+    if not category_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dizi torrent icin dizi secilmelidir")
+    _ensure_series(db, category_id)
+    if not season_number:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dizi torrent icin sezon numarasi zorunludur")
+    if episode_number is not None and episode_number < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bolum numarasi 1 veya daha buyuk olmalidir")
+
+
+def _resolve_save_path(category: TorrentCategory, category_id: int | None) -> Path:
+    if category == TorrentCategory.movie and category_id:
+        target_directory = settings.movies_uploads_path / str(category_id)
+    elif category == TorrentCategory.series and category_id:
+        target_directory = settings.movies_uploads_path / f"series_{category_id}"
+    else:
+        target_directory = settings.torrent_downloads_path
+    target_directory.mkdir(parents=True, exist_ok=True)
+    return target_directory
+
+
+def _pick_primary_video_file(video_files: list[Path]) -> Path:
+    return max(video_files, key=lambda file_path: (file_path.stat().st_size, file_path.name.lower()))
+
+
+def _upsert_series_episode(db: Session, season_id: int, episode_number: int, file_path: Path, title: str) -> None:
+    episode = (
+        db.query(SeriesEpisode)
+        .filter(
+            SeriesEpisode.season_id == season_id,
+            SeriesEpisode.episode_number == episode_number,
+        )
+        .first()
+    )
+    if episode is None:
+        episode = SeriesEpisode(season_id=season_id, episode_number=episode_number)
+    episode.title = title
+    episode.file_path = str(file_path)
+    db.add(episode)
+    db.commit()
 
 
 # ─── libtorrent state → TorrentStatus mapping ────────────────────────────────
@@ -118,6 +191,7 @@ def _update_db_from_handle(db: Session, db_id: int, handle: Any) -> None:
 
     s = handle.status()
     paused = s.paused if hasattr(s, "paused") else handle.is_paused()
+    previous_status = record.status
 
     new_status = _map_lt_state(s, paused)
     progress = round(s.progress * 100, 1)
@@ -156,16 +230,13 @@ def _update_db_from_handle(db: Session, db_id: int, handle: Any) -> None:
     db.commit()
 
     # On completion, trigger file registration
-    if new_status in (TorrentStatus.seeding, TorrentStatus.completed) and record.status != TorrentStatus.completed:
+    if previous_status != TorrentStatus.completed and new_status in (TorrentStatus.seeding, TorrentStatus.completed):
         _register_completed(db, record, handle)
 
 
 def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> None:
     """Move completed files to content library."""
     try:
-        if record.status == TorrentStatus.completed:
-            return  # Already processed
-
         record.status = TorrentStatus.completed
         record.progress = 100.0
         record.download_speed = None
@@ -179,6 +250,7 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
         ti = handle.get_torrent_info()
         save_path = Path(handle.status().save_path)
         video_exts = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".ts", ".m2ts"}
+        video_files: list[Path] = []
 
         for i in range(ti.num_files()):
             f = ti.files().file_path(i)
@@ -187,71 +259,61 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
                 continue
             if not file_path.exists():
                 continue
+            video_files.append(file_path)
 
-            if record.category == TorrentCategory.movie and record.category_id:
-                existing = db.query(MovieContent).filter(MovieContent.file_path == str(file_path)).first()
-                if existing is None:
-                    movie = MovieContent(
-                        title=record.name,
-                        category_id=record.category_id,
-                        file_path=str(file_path),
-                        file_size_bytes=file_path.stat().st_size,
-                        is_public=True,
-                    )
-                    db.add(movie)
-                    db.commit()
-                    logger.info("Torrent completed: registered MovieContent id=%s", movie.id)
+        if not video_files:
+            return
 
-            elif record.category == TorrentCategory.series and record.category_id:
-                # Find the selected SeriesContent by its ID (category_id stores series.id)
-                series = db.query(SeriesContent).filter(
-                    SeriesContent.id == record.category_id,
-                ).first()
-                if series is None:
-                    # Fallback: create a new series entry
-                    series = SeriesContent(
-                        title=record.name,
-                    )
-                    db.add(series)
-                    db.flush()
+        video_files.sort(key=lambda file_path: _natural_sort_key(str(file_path.relative_to(save_path))))
 
-                # Use season_id if explicitly provided, else find/create Season 1
-                if record.season_id:
-                    season = db.query(SeriesSeason).filter(
-                        SeriesSeason.id == record.season_id,
-                        SeriesSeason.series_id == series.id,
-                    ).first()
-                    if season is None:
-                        # season_id may not match series — fallback to season 1
-                        season = db.query(SeriesSeason).filter(
-                            SeriesSeason.series_id == series.id,
-                            SeriesSeason.season_number == 1,
-                        ).first()
-                else:
-                    season = db.query(SeriesSeason).filter(
-                        SeriesSeason.series_id == series.id,
-                        SeriesSeason.season_number == 1,
-                    ).first()
-
-                if season is None:
-                    season = SeriesSeason(series_id=series.id, season_number=1)
-                    db.add(season)
-                    db.flush()
-
-                # Count existing episodes for numbering
-                ep_count = db.query(SeriesEpisode).filter(
-                    SeriesEpisode.season_id == season.id
-                ).count()
-
-                episode = SeriesEpisode(
-                    season_id=season.id,
-                    episode_number=ep_count + 1,
-                    title=file_path.stem,
-                    file_path=str(file_path),
+        if record.category == TorrentCategory.movie and record.category_id:
+            primary_file = _pick_primary_video_file(video_files)
+            existing = db.query(MovieContent).filter(MovieContent.file_path == str(primary_file)).first()
+            if existing is None:
+                movie = MovieContent(
+                    title=record.name,
+                    category_id=record.category_id,
+                    file_path=str(primary_file),
+                    file_size_bytes=primary_file.stat().st_size,
+                    is_public=True,
                 )
-                db.add(episode)
+                db.add(movie)
                 db.commit()
-                logger.info("Torrent completed: registered SeriesEpisode for series id=%s season_id=%s", series.id, season.id)
+                logger.info("Torrent completed: registered MovieContent id=%s", movie.id)
+
+        elif record.category == TorrentCategory.series and record.category_id:
+            series = db.query(SeriesContent).filter(SeriesContent.id == record.category_id).first()
+            if series is None:
+                series = SeriesContent(title=record.name)
+                db.add(series)
+                db.flush()
+
+            target_season_number = record.season_number or 1
+            season = (
+                db.query(SeriesSeason)
+                .filter(
+                    SeriesSeason.series_id == series.id,
+                    SeriesSeason.season_number == target_season_number,
+                )
+                .first()
+            )
+            if season is None:
+                season = SeriesSeason(series_id=series.id, season_number=target_season_number, title=f"Sezon {target_season_number}")
+                db.add(season)
+                db.flush()
+
+            if record.episode_number is not None:
+                primary_file = _pick_primary_video_file(video_files)
+                _upsert_series_episode(db, season.id, record.episode_number, primary_file, primary_file.stem)
+            else:
+                for index, file_path in enumerate(video_files, start=1):
+                    _upsert_series_episode(db, season.id, index, file_path, file_path.stem)
+
+            logger.info(
+                "Torrent completed: registered SeriesEpisode entries for series id=%s season_number=%s",
+                series.id,
+                target_season_number,
+            )
 
     except Exception as exc:
         logger.error("Error registering completed torrent id=%s: %s", record.id, exc)
@@ -354,7 +416,8 @@ def _serialize(record: TorrentDownload) -> dict:
         "info_hash": record.info_hash,
         "error_message": record.error_message,
         "no_seed": record.no_seed if record.no_seed is not None else True,
-        "season_id": record.season_id,
+        "season_number": record.season_number,
+        "episode_number": record.episode_number,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
@@ -362,13 +425,13 @@ def _serialize(record: TorrentDownload) -> dict:
 
 def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
     _ensure_lt()
-
-    TORRENT_SAVE_PATH.mkdir(parents=True, exist_ok=True)
+    torrent_category = TorrentCategory(payload.category)
+    _validate_target(db, torrent_category, payload.category_id, payload.season_number, payload.episode_number)
+    save_path = _resolve_save_path(torrent_category, payload.category_id)
 
     # Derive name from magnet link if not provided
     name = payload.name
     if not name:
-        import re
         dn_match = re.search(r"dn=([^&]+)", payload.magnet_link)
         if dn_match:
             from urllib.parse import unquote_plus
@@ -379,12 +442,13 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
     record = TorrentDownload(
         name=name,
         magnet_link=payload.magnet_link,
-        category=TorrentCategory(payload.category),
+        category=torrent_category,
         category_id=payload.category_id,
-        season_id=payload.season_id,
+        season_number=payload.season_number,
+        episode_number=payload.episode_number,
         status=TorrentStatus.downloading,
         progress=0.0,
-        save_path=str(TORRENT_SAVE_PATH),
+        save_path=str(save_path),
         no_seed=payload.no_seed,
     )
     db.add(record)
@@ -392,7 +456,7 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
     db.refresh(record)
 
     try:
-        handle = _add_magnet_to_session(record.id, payload.magnet_link, str(TORRENT_SAVE_PATH))
+        handle = _add_magnet_to_session(record.id, payload.magnet_link, str(save_path))
         if payload.no_seed:
             try:
                 handle.set_upload_limit(0)
@@ -414,14 +478,16 @@ async def add_torrent_from_file(
     name: str | None,
     category: str,
     category_id: int | None,
-    season_id: int | None,
+    season_number: int | None,
+    episode_number: int | None,
     no_seed: bool,
 ) -> dict:
     """Add a torrent from an uploaded .torrent file."""
     _ensure_lt()
-
-    TORRENT_SAVE_PATH.mkdir(parents=True, exist_ok=True)
     TORRENT_FILES_PATH.mkdir(parents=True, exist_ok=True)
+    torrent_category = TorrentCategory(category)
+    _validate_target(db, torrent_category, category_id, season_number, episode_number)
+    save_path = _resolve_save_path(torrent_category, category_id)
 
     # Save uploaded file
     safe_name = Path(file.filename or "torrent.torrent").name
@@ -449,12 +515,13 @@ async def add_torrent_from_file(
     record = TorrentDownload(
         name=display_name[:499],
         torrent_file_path=str(dest),
-        category=TorrentCategory(category),
+        category=torrent_category,
         category_id=category_id,
-        season_id=season_id,
+        season_number=season_number,
+        episode_number=episode_number,
         status=TorrentStatus.downloading,
         progress=0.0,
-        save_path=str(TORRENT_SAVE_PATH),
+        save_path=str(save_path),
         no_seed=no_seed,
     )
     db.add(record)
@@ -462,7 +529,7 @@ async def add_torrent_from_file(
     db.refresh(record)
 
     try:
-        handle = _add_torrent_file_to_session(record.id, dest, str(TORRENT_SAVE_PATH))
+        handle = _add_torrent_file_to_session(record.id, dest, str(save_path))
         if no_seed:
             try:
                 handle.set_upload_limit(0)

@@ -13,7 +13,8 @@ class TorrentAddRequest(BaseModel):
     name: str | None = Field(default=None, max_length=500)
     category: TorrentCategoryLiteral
     category_id: int | None = Field(default=None, ge=1)
-    season_id: int | None = Field(default=None, ge=1, description="Dizi icin hedef sezon ID")
+    season_number: int | None = Field(default=None, ge=1, description="Dizi icin hedef sezon numarasi")
+    episode_number: int | None = Field(default=None, ge=1, description="Bos ise tum videolar otomatik bolumlenir")
     no_seed: bool = Field(default=True, description="Indirme tamamlaninca seeding durdur")
 
 
@@ -35,7 +36,8 @@ class TorrentResponse(BaseModel):
     info_hash: str | None
     error_message: str | None
     no_seed: bool
-    season_id: int | None
+    season_number: int | None
+    episode_number: int | None
     created_at: datetime
     updated_at: datetime | None
 
