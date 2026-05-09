@@ -728,14 +728,38 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist bulunamadi")
         _do_checks_and_record(db, user, request, item_id, "vod_channel", getattr(playlist, "name", None))
 
-        # Yerel HLS: sadece playlist main-server veya local broadcast ise kullan.
-        # LB sunucusuna atanmissa (server_type=loadbalancer) stream_url proxy yolunu kullan.
-        hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
+        # ── LB playlist: main server'da HLS yok, dogrudan LB'den proxy al ──────
         _is_lb_playlist = (
             playlist.server is not None
-            and str(getattr(playlist.server, "server_type", "")) == "loadbalancer"
+            and playlist.server.server_type == ServerType.loadbalancer
         )
-        if not _is_lb_playlist and os.path.isfile(hls_path):
+        if _is_lb_playlist:
+            if not playlist.stream_url:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LB playlist stream URL eksik")
+            try:
+                resp = await _http_client.get(playlist.stream_url)
+                resp.raise_for_status()
+            except Exception:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LB stream alinamadi")
+            proxy_base = f"http://{_server_host(db)}:{_server_port()}/hls-proxy/{playlist.id}/"
+            lines = []
+            for line in resp.text.splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and not stripped.startswith("http"):
+                    lines.append(proxy_base + stripped)
+                elif stripped.startswith("http") and stripped.endswith(".ts"):
+                    lines.append(proxy_base + stripped.rsplit("/", 1)[-1])
+                else:
+                    lines.append(line)
+            return PlainTextResponse(
+                content="\n".join(lines) + "\n",
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"},
+            )
+
+        # ── Main server playlist: once yerel HLS dosyasina bak ───────────────
+        hls_path = f"{HLS_BASE_DIR}/{playlist.id}/stream.m3u8"
+        if os.path.isfile(hls_path):
             with open(hls_path, "r") as f:
                 m3u8_content = f.read()
             hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/{playlist.id}/"
@@ -749,40 +773,6 @@ async def serve_live(username: str, password: str, item_id: int, request: Reques
                 content="\n".join(rewritten_lines) + "\n",
                 media_type="application/vnd.apple.mpegurl",
                 headers={"Cache-Control": "no-cache"},
-            )
-
-        if playlist.stream_url:
-            # Uzak LB sunucudaki stream — m3u8'i proxy et, segment URL'lerini rewrite et
-            try:
-                resp = await _http_client.get(playlist.stream_url)
-                resp.raise_for_status()
-            except Exception:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LB stream alinamadi")
-
-            # Relative segment path'lerini /hls-proxy/ uzerinden rewrite et
-            proxy_base = f"http://{_server_host(db)}:{_server_port()}/hls-proxy/{playlist.id}/"
-            lines = []
-            for line in resp.text.splitlines():
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and not stripped.startswith("http"):
-                    # Relative path (ornegin: seg_00100.ts)
-                    lines.append(proxy_base + stripped)
-                elif stripped.startswith("http"):
-                    # Zaten absolute URL ise de proxy'e yonlendir
-                    # Sadece segment dosyalari (.ts)
-                    if stripped.endswith(".ts"):
-                        seg_name = stripped.rsplit("/", 1)[-1]
-                        lines.append(proxy_base + seg_name)
-                    else:
-                        lines.append(stripped)
-                else:
-                    lines.append(line)
-
-            rewritten = "\n".join(lines) + "\n"
-            return PlainTextResponse(
-                content=rewritten,
-                media_type="application/vnd.apple.mpegurl",
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"},
             )
 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD Channel stream bulunamadi")
