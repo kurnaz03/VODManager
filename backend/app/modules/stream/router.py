@@ -589,18 +589,7 @@ def get_m3u_plus(
                         lines.append(extinf)
                         lines.append(f"{base}/series/{username}/{password}/{item.item_id}.mp4")
             elif item_type == "vod_channel":
-                # LB sunucusundaki playlist icin stream_url'yi direkt kullan;
-                # main server playlist icin proxy URL uret
-                playlist_obj = db.query(Playlist).filter(Playlist.id == item.item_id).first()
-                if (
-                    playlist_obj
-                    and playlist_obj.stream_url
-                    and playlist_obj.server is not None
-                    and playlist_obj.server.server_type == ServerType.loadbalancer
-                ):
-                    stream_url = playlist_obj.stream_url
-                else:
-                    stream_url = f"{base}/live/{username}/{password}/{item.item_id}.m3u8"
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.m3u8"
                 extinf = (
                     f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
                     f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
