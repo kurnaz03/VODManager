@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import signal
 import subprocess
 from datetime import datetime, timezone
@@ -41,12 +42,24 @@ def _build_radio_ffmpeg_cmd(channel: RadioContent, stream_dir: str) -> list[str]
         f"{stream_dir}/stream.m3u8",
     ]
 
+    # Common audio output params shared by all modes
+    audio_out = [
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ar", "44100",
+        "-ac", "2",
+        "-af", "aresample=async=1000",
+    ]
+
     if visual_type == "video" and visual_url:
         return [
             "ffmpeg", "-y",
+            "-fflags", "+genpts",
             "-re", "-stream_loop", "-1",
             "-i", visual_url,
+            "-thread_queue_size", "512",
             "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+            "-analyzeduration", "2000000", "-probesize", "1000000",
             "-i", stream_url,
             "-map", "0:v",
             "-map", "1:a",
@@ -55,19 +68,18 @@ def _build_radio_ffmpeg_cmd(channel: RadioContent, stream_dir: str) -> list[str]
             "-crf", "23",
             "-tune", "stillimage",
             "-threads", "1",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-ar", "44100",
-            "-ac", "2",
-            "-shortest",
-        ] + hls_params
+            "-avoid_negative_ts", "make_zero",
+        ] + audio_out + hls_params
 
     if visual_type == "image" and visual_url:
         return [
             "ffmpeg", "-y",
+            "-fflags", "+genpts",
             "-loop", "1",
             "-i", visual_url,
+            "-thread_queue_size", "512",
             "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+            "-analyzeduration", "2000000", "-probesize", "1000000",
             "-i", stream_url,
             "-map", "0:v",
             "-map", "1:a",
@@ -76,37 +88,35 @@ def _build_radio_ffmpeg_cmd(channel: RadioContent, stream_dir: str) -> list[str]
             "-crf", "23",
             "-tune", "stillimage",
             "-threads", "1",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-ar", "44100",
-            "-ac", "2",
+            "-avoid_negative_ts", "make_zero",
             "-shortest",
-        ] + hls_params
+        ] + audio_out + hls_params
 
     # audio-only (visual_type == 'none' or no visual_url)
     return [
         "ffmpeg", "-y",
+        "-fflags", "+genpts",
+        "-thread_queue_size", "512",
         "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+        "-analyzeduration", "2000000", "-probesize", "1000000",
         "-i", stream_url,
-        "-c:a", "aac",
-        "-b:a", "128k",
+        "-avoid_negative_ts", "make_zero",
         "-vn",
-    ] + hls_params
+    ] + audio_out + hls_params
 
 
 def _build_restart_script(ffmpeg_args: list[str], log_path: str) -> str:
-    """Wrap FFmpeg in a bash loop that restarts it on exit."""
-    cmd_parts = []
-    for a in ffmpeg_args:
-        if " " in a or "'" in a or "(" in a or ")" in a:
-            cmd_parts.append(f'"{a}"')
-        else:
-            cmd_parts.append(a)
-    ffmpeg_cmd = " ".join(cmd_parts)
+    """Wrap FFmpeg in a bash loop that restarts it on exit.
+
+    Uses shlex.quote() to safely handle URLs/paths with special shell chars
+    (semicolons, spaces, question marks, ampersands, etc.).
+    """
+    ffmpeg_cmd = " ".join(shlex.quote(a) for a in ffmpeg_args)
+    log_q = shlex.quote(log_path)
     return (
         f'while true; do '
-        f'{ffmpeg_cmd} >> "{log_path}" 2>&1; '
-        f'echo "[wrapper] FFmpeg exited, restarting in 2s..." >> "{log_path}" 2>&1; '
+        f'{ffmpeg_cmd} >> {log_q} 2>&1; '
+        f'echo "[wrapper] FFmpeg exited, restarting in 2s..." >> {log_q} 2>&1; '
         f'sleep 2; '
         f'done'
     )

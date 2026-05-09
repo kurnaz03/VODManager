@@ -353,8 +353,8 @@ function RadioChannelsTab() {
                 <tr key={item.id} className={`table-zebra hover:bg-slate-50 ${item.is_active ? 'bg-emerald-50/30' : ''}`}>
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">#{item.id}</td>
                   <td className="px-4 py-3">
-                    {item.logo_url
-                      ? <img src={item.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                    {(item.logo_url || (item.visual_type === 'image' && item.visual_url))
+                      ? <img src={item.logo_url || item.visual_url!} alt="" className="h-8 w-8 rounded-lg object-cover" />
                       : <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100"><Radio size={14} className="text-slate-400" /></span>}
                   </td>
                   <td className="px-4 py-3">
