@@ -16,6 +16,11 @@ class TorrentAddRequest(BaseModel):
     season_number: int | None = Field(default=None, ge=1, description="Dizi icin hedef sezon numarasi")
     episode_number: int | None = Field(default=None, ge=1, description="Bos ise tum videolar otomatik bolumlenir")
     no_seed: bool = Field(default=True, description="Indirme tamamlaninca seeding durdur")
+    tmdb_id: int | None = Field(default=None, ge=1)
+    tmdb_poster_url: str | None = Field(default=None, max_length=1000)
+    tmdb_overview: str | None = Field(default=None, max_length=4000)
+    tmdb_rating: float | None = Field(default=None, ge=0, le=10)
+    tmdb_release_year: int | None = Field(default=None, ge=1900, le=2100)
 
 
 class TorrentResponse(BaseModel):
@@ -38,6 +43,11 @@ class TorrentResponse(BaseModel):
     no_seed: bool
     season_number: int | None
     episode_number: int | None
+    tmdb_id: int | None
+    tmdb_poster_url: str | None
+    tmdb_overview: str | None
+    tmdb_rating: float | None
+    tmdb_release_year: int | None
     created_at: datetime
     updated_at: datetime | None
 

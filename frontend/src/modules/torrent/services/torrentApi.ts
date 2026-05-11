@@ -23,6 +23,11 @@ export interface TorrentItem {
   info_hash: string | null
   error_message: string | null
   no_seed: boolean
+  tmdb_id: number | null
+  tmdb_poster_url: string | null
+  tmdb_overview: string | null
+  tmdb_rating: number | null
+  tmdb_release_year: number | null
   created_at: string
   updated_at: string | null
 }
@@ -35,6 +40,11 @@ export interface TorrentAddPayload {
   season_number?: number | null
   episode_number?: number | null
   no_seed?: boolean
+  tmdb_id?: number | null
+  tmdb_poster_url?: string | null
+  tmdb_overview?: string | null
+  tmdb_rating?: number | null
+  tmdb_release_year?: number | null
 }
 
 export interface TorrentFileItem {

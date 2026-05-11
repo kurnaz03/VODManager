@@ -92,9 +92,11 @@ function TorrentFileList({ torrentId }: { torrentId: number }) {
 function TMDBAutocomplete({
   value,
   onChange,
+  onSelect,
 }: {
   value: string
   onChange: (title: string) => void
+  onSelect?: (result: TMDBResult | null) => void
 }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
@@ -142,6 +144,7 @@ function TMDBAutocomplete({
     const title = result.title || result.original_title
     setQuery(title)
     onChange(title)
+    onSelect?.(result)
     setOpen(false)
     setResults([])
   }
@@ -155,6 +158,7 @@ function TMDBAutocomplete({
           onChange={(e) => {
             setQuery(e.target.value)
             onChange(e.target.value)
+            onSelect?.(null)
           }}
           placeholder="Film / dizi adi yaz, TMDB'den oner gelir..."
           className="h-11 w-full rounded-2xl border border-slate-200 px-4 pr-10 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
@@ -206,6 +210,7 @@ export default function TorrentPage() {
   const [magnetLink, setMagnetLink] = useState('')
   const [torrentFile, setTorrentFile] = useState<File | null>(null)
   const [torrentName, setTorrentName] = useState('')
+  const [selectedTmdb, setSelectedTmdb] = useState<TMDBResult | null>(null)
   const [category, setCategory] = useState<'movie' | 'series'>('movie')
   const [categoryId, setCategoryId] = useState<number | ''>('')
   const [seasonNumber, setSeasonNumber] = useState<number | ''>('')
@@ -242,6 +247,7 @@ export default function TorrentPage() {
       qc.invalidateQueries({ queryKey: ['torrents'] })
       setMagnetLink('')
       setTorrentName('')
+      setSelectedTmdb(null)
     },
   })
 
@@ -251,6 +257,7 @@ export default function TorrentPage() {
       qc.invalidateQueries({ queryKey: ['torrents'] })
       setTorrentFile(null)
       setTorrentName('')
+      setSelectedTmdb(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
   })
@@ -284,6 +291,11 @@ export default function TorrentPage() {
         season_number: seasonNumber !== '' ? Number(seasonNumber) : undefined,
         episode_number: episodeNumber !== '' ? Number(episodeNumber) : undefined,
         no_seed: noSeed,
+        tmdb_id: selectedTmdb?.tmdb_id ?? null,
+        tmdb_poster_url: selectedTmdb?.poster_url ?? null,
+        tmdb_overview: selectedTmdb?.overview ?? null,
+        tmdb_rating: null,
+        tmdb_release_year: selectedTmdb?.year ?? null,
       })
     } else {
       if (!torrentFile) return
@@ -295,6 +307,10 @@ export default function TorrentPage() {
       if (seasonNumber !== '') fd.append('season_number', String(seasonNumber))
       if (episodeNumber !== '') fd.append('episode_number', String(episodeNumber))
       fd.append('no_seed', String(noSeed))
+      if (selectedTmdb?.tmdb_id != null) fd.append('tmdb_id', String(selectedTmdb.tmdb_id))
+      if (selectedTmdb?.poster_url != null) fd.append('tmdb_poster_url', selectedTmdb.poster_url)
+      if (selectedTmdb?.overview != null) fd.append('tmdb_overview', selectedTmdb.overview)
+      if (selectedTmdb?.year != null) fd.append('tmdb_release_year', String(selectedTmdb.year))
       addFileMutation.mutate(fd)
     }
   }
@@ -388,6 +404,7 @@ export default function TorrentPage() {
             <TMDBAutocomplete
               value={torrentName}
               onChange={setTorrentName}
+              onSelect={setSelectedTmdb}
             />
           </div>
 

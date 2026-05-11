@@ -270,12 +270,20 @@ def _register_completed(db: Session, record: TorrentDownload, handle: Any) -> No
             primary_file = _pick_primary_video_file(video_files)
             existing = db.query(MovieContent).filter(MovieContent.file_path == str(primary_file)).first()
             if existing is None:
+                poster_url = record.tmdb_poster_url
+                if poster_url and "w92" in poster_url:
+                    poster_url = poster_url.replace("w92", "w500")
                 movie = MovieContent(
                     title=record.name,
                     category_id=record.category_id,
                     file_path=str(primary_file),
                     file_size_bytes=primary_file.stat().st_size,
                     is_public=True,
+                    tmdb_id=record.tmdb_id,
+                    poster_url=poster_url,
+                    description=record.tmdb_overview,
+                    rating=record.tmdb_rating,
+                    release_year=record.tmdb_release_year,
                 )
                 db.add(movie)
                 db.commit()
@@ -418,6 +426,11 @@ def _serialize(record: TorrentDownload) -> dict:
         "no_seed": record.no_seed if record.no_seed is not None else True,
         "season_number": record.season_number,
         "episode_number": record.episode_number,
+        "tmdb_id": record.tmdb_id,
+        "tmdb_poster_url": record.tmdb_poster_url,
+        "tmdb_overview": record.tmdb_overview,
+        "tmdb_rating": record.tmdb_rating,
+        "tmdb_release_year": record.tmdb_release_year,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
@@ -450,6 +463,11 @@ def add_torrent(db: Session, payload: TorrentAddRequest) -> dict:
         progress=0.0,
         save_path=str(save_path),
         no_seed=payload.no_seed,
+        tmdb_id=payload.tmdb_id,
+        tmdb_poster_url=payload.tmdb_poster_url,
+        tmdb_overview=payload.tmdb_overview,
+        tmdb_rating=payload.tmdb_rating,
+        tmdb_release_year=payload.tmdb_release_year,
     )
     db.add(record)
     db.commit()
@@ -481,6 +499,11 @@ async def add_torrent_from_file(
     season_number: int | None,
     episode_number: int | None,
     no_seed: bool,
+    tmdb_id: int | None = None,
+    tmdb_poster_url: str | None = None,
+    tmdb_overview: str | None = None,
+    tmdb_rating: float | None = None,
+    tmdb_release_year: int | None = None,
 ) -> dict:
     """Add a torrent from an uploaded .torrent file."""
     _ensure_lt()
@@ -523,6 +546,11 @@ async def add_torrent_from_file(
         progress=0.0,
         save_path=str(save_path),
         no_seed=no_seed,
+        tmdb_id=tmdb_id,
+        tmdb_poster_url=tmdb_poster_url,
+        tmdb_overview=tmdb_overview,
+        tmdb_rating=tmdb_rating,
+        tmdb_release_year=tmdb_release_year,
     )
     db.add(record)
     db.commit()

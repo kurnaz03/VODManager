@@ -24,10 +24,22 @@ async def add_torrent_file(
     season_number: Optional[int] = Form(default=None),
     episode_number: Optional[int] = Form(default=None),
     no_seed: bool = Form(default=True),
+    tmdb_id: Optional[int] = Form(default=None),
+    tmdb_poster_url: Optional[str] = Form(default=None),
+    tmdb_overview: Optional[str] = Form(default=None),
+    tmdb_rating: Optional[float] = Form(default=None),
+    tmdb_release_year: Optional[int] = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Upload a .torrent file and start downloading."""
-    return await service.add_torrent_from_file(db, file, name, category, category_id, season_number, episode_number, no_seed)
+    return await service.add_torrent_from_file(
+        db, file, name, category, category_id, season_number, episode_number, no_seed,
+        tmdb_id=tmdb_id,
+        tmdb_poster_url=tmdb_poster_url,
+        tmdb_overview=tmdb_overview,
+        tmdb_rating=tmdb_rating,
+        tmdb_release_year=tmdb_release_year,
+    )
 
 
 @router.get("/tmdb-search", response_model=list[TMDBResult], tags=["torrent"])
