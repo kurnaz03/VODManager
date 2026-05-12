@@ -14,7 +14,6 @@ import {
   Search,
   Server,
   Square,
-  StopCircle,
   Trash2,
   Users,
   X,
