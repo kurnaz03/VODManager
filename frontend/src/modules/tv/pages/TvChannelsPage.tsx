@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Calendar,
   CheckCircle2,
-  Edit2,
+  Copy,
   Filter,
-  Mail,
   MonitorPlay,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -422,6 +423,8 @@ export default function TvChannelsPage() {
   const [testingId, setTestingId] = useState<number | null>(null)
   const [viewersChannel, setViewersChannel] = useState<TvChannel | null>(null)
 
+  const [copyMsg, setCopyMsg] = useState<string | null>(null)
+
   // Filter state
   const [searchText, setSearchText] = useState('')
   const [filterServerId, setFilterServerId] = useState<number | null>(null)
@@ -667,6 +670,17 @@ export default function TvChannelsPage() {
         </div>
       )}
 
+      {/* Copy Message Banner */}
+      {copyMsg && (
+        <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
+          <CheckCircle2 size={16} />
+          {copyMsg}
+          <button type="button" onClick={() => setCopyMsg(null)} className="ml-auto text-current opacity-60 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ── Table ── */}
       <div className="px-2 sm:px-6 py-4">
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -788,50 +802,72 @@ export default function TvChannelsPage() {
                     {/* ACTIONS */}
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1">
-                        {/* Stop - blue square */}
+                        {/* Stop */}
                         <button
                           type="button"
-                          title="Stop"
+                          title="Durdur"
+                          disabled={!ch.is_active}
                           onClick={() => tvChannelsApi.stop(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
-                          className="flex items-center justify-center w-7 h-7 rounded bg-blue-500 hover:bg-blue-600 text-white transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
                         >
-                          <StopCircle size={12} />
+                          <Square size={12} fill="currentColor" />
                         </button>
-                        {/* Start - dark square */}
+                        {/* Start */}
                         <button
                           type="button"
-                          title="Start"
+                          title="Baslat"
+                          disabled={ch.is_active}
                           onClick={() => tvChannelsApi.start(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
-                          className="flex items-center justify-center w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-white transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
                         >
-                          <Square size={12} />
+                          <Play size={12} fill="currentColor" />
                         </button>
-                        {/* Reload - green */}
+                        <span className="mx-0.5" />
+                        {/* Reload */}
                         <button
                           type="button"
-                          title="Reload"
+                          title="Yeniden Baslat"
                           onClick={() => tvChannelsApi.restart(ch.id).then(() => queryClient.invalidateQueries({ queryKey: ['tv-channels'] }))}
-                          className="flex items-center justify-center w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 text-white transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 transition"
                         >
                           <RotateCcw size={12} />
                         </button>
-                        {/* Edit - yellow */}
+                        {/* Edit */}
                         <button
                           type="button"
-                          title="Edit"
+                          title="Duzenle"
                           onClick={() => { setEditChannel(ch); setModalOpen(true) }}
-                          className="flex items-center justify-center w-7 h-7 rounded bg-yellow-400 hover:bg-yellow-500 text-white transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
                         >
-                          <Edit2 size={12} />
+                          <Pencil size={12} />
                         </button>
-                        {/* Delete - red */}
+                        {/* Delete */}
                         <button
                           type="button"
-                          title="Delete"
+                          title="Sil"
                           onClick={() => setDeleteId(ch.id)}
-                          className="flex items-center justify-center w-7 h-7 rounded bg-red-500 hover:bg-red-600 text-white transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-500 hover:bg-rose-200 transition"
                         >
-                          <X size={12} />
+                          <Trash2 size={12} />
+                        </button>
+                        {/* M3U Link */}
+                        <button
+                          type="button"
+                          title="M3U URL Kopyala"
+                          onClick={() => { navigator.clipboard.writeText(ch.stream_url); setCopyMsg('M3U URL kopyalandi') }}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition"
+                        >
+                          <Copy size={12} />
+                        </button>
+                        {/* EPG Link */}
+                        <button
+                          type="button"
+                          title="EPG ID Kopyala"
+                          disabled={!ch.epg_channel_id}
+                          onClick={() => { if (ch.epg_channel_id) { navigator.clipboard.writeText(ch.epg_channel_id); setCopyMsg('EPG ID kopyalandi') } }}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100 text-purple-600 hover:bg-purple-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                        >
+                          <Calendar size={12} />
                         </button>
                       </div>
                     </td>
@@ -857,14 +893,14 @@ export default function TvChannelsPage() {
                     <td className="px-3 py-3">
                       <button
                         type="button"
-                        title={ch.epg_channel_id ?? 'No EPG'}
-                        className={`flex items-center justify-center w-7 h-7 rounded transition ${
+                        title={ch.epg_channel_id ?? 'EPG yok'}
+                        className={`flex items-center justify-center w-7 h-7 rounded-lg transition ${
                           ch.epg_channel_id
-                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                            ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
                             : 'bg-gray-100 text-gray-400 cursor-default'
                         }`}
                       >
-                        <Mail size={12} />
+                        <Calendar size={12} />
                       </button>
                     </td>
 
