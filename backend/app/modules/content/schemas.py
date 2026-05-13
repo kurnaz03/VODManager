@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 CategoryTypeLiteral = Literal["movies", "series", "tv", "radio"]
 BouquetTypeLiteral = Literal["mixed", "movies", "series", "tv", "radio"]
-BouquetItemTypeLiteral = Literal["tv", "series", "vod_channel", "radio", "movie"]
+BouquetItemTypeLiteral = Literal["tv", "series", "vod_channel", "radio", "movie", "music_playlist"]
 
 
 class CategoryBase(BaseModel):
@@ -394,6 +394,7 @@ class MusicPlaylistCreate(BaseModel):
     visual_type: VisualTypeLiteral = "none"
     is_active: bool = False
     server_id: int | None = None
+    category_id: int | None = None
 
 
 class MusicPlaylistUpdate(BaseModel):
@@ -406,19 +407,23 @@ class MusicPlaylistUpdate(BaseModel):
     ffmpeg_pid: int | None = None
     stream_url: str | None = None
     status: str | None = None
+    category_id: int | None = None
 
 
 class MusicPlaylistItemCreate(BaseModel):
-    track_id: int = Field(ge=1)
+    track_id: int | None = Field(default=None, ge=1)
+    radio_channel_id: int | None = Field(default=None, ge=1)
     position: int = Field(default=0, ge=0)
 
 
 class MusicPlaylistItemOut(BaseModel):
     id: int
     playlist_id: int
-    track_id: int
+    track_id: int | None
+    radio_channel_id: int | None
     position: int
     track: MusicTrackOut | None
+    radio_channel: RadioContentResponse | None
 
     model_config = {"from_attributes": True}
 
@@ -435,8 +440,10 @@ class MusicPlaylistOut(BaseModel):
     stream_url: str | None
     status: str
     started_at: datetime | None
-    created_at: datetime
+    category_id: int | None
+    category_name: str | None
     items: list[MusicPlaylistItemOut]
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

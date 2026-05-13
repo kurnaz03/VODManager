@@ -88,6 +88,7 @@ class BouquetItemType(str, enum.Enum):
     vod_channel = "vod_channel"
     radio = "radio"
     movie = "movie"
+    music_playlist = "music_playlist"
 
 
 class BouquetItem(Base):
@@ -261,8 +262,10 @@ class MusicPlaylist(Base):
     stream_url = Column(String(1000), nullable=True)
     status = Column(String(20), nullable=False, default="stopped")
     started_at = Column(DateTime(timezone=True), nullable=True)
+    category_id = Column(Integer, ForeignKey("radio_categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    category = relationship("RadioCategory")
     items = relationship(
         "MusicPlaylistItem",
         back_populates="playlist",
@@ -276,8 +279,10 @@ class MusicPlaylistItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     playlist_id = Column(Integer, ForeignKey("music_playlists.id", ondelete="CASCADE"), nullable=False, index=True)
-    track_id = Column(Integer, ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=False, index=True)
+    track_id = Column(Integer, ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=True, index=True)
+    radio_channel_id = Column(Integer, ForeignKey("radio_contents.id", ondelete="CASCADE"), nullable=True, index=True)
     position = Column(Integer, nullable=False, default=0)
 
     playlist = relationship("MusicPlaylist", back_populates="items")
     track = relationship("MusicTrack")
+    radio_channel = relationship("RadioContent")

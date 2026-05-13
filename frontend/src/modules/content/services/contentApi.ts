@@ -2,7 +2,7 @@ import api from '../../../utils/api'
 
 export type CategoryType = 'movies' | 'series' | 'tv' | 'radio'
 export type BouquetType = 'mixed' | 'movies' | 'series' | 'tv' | 'radio'
-export type BouquetItemType = 'tv' | 'series' | 'vod_channel' | 'radio' | 'movie'
+export type BouquetItemType = 'tv' | 'series' | 'vod_channel' | 'radio' | 'movie' | 'music_playlist'
 
 export interface Category {
   id: number
@@ -446,9 +446,11 @@ export interface MusicTrackCreate {
 export interface MusicPlaylistItem {
   id: number
   playlist_id: number
-  track_id: number
+  track_id: number | null
+  radio_channel_id: number | null
   position: number
   track: MusicTrack
+  radio_channel: RadioContent | null
 }
 
 export interface MusicPlaylist {
@@ -463,6 +465,8 @@ export interface MusicPlaylist {
   stream_url: string | null
   status: 'stopped' | 'playing'
   started_at: string | null
+  category_id: number | null
+  category_name: string | null
   items: MusicPlaylistItem[]
   created_at: string
 }
@@ -473,6 +477,7 @@ export interface MusicPlaylistCreate {
   visual_url?: string | null
   visual_type?: 'video' | 'image' | 'none'
   server_id?: number | null
+  category_id?: number | null
 }
 
 export interface MusicPlaylistStatus {
@@ -565,8 +570,8 @@ export const musicApi = {
     async remove(id: number) {
       await api.delete(`/music/playlists/${id}`)
     },
-    async addItem(id: number, track_id: number, position?: number) {
-      const r = await api.post<MusicPlaylistItem>(`/music/playlists/${id}/items`, { track_id, position })
+    async addItem(id: number, track_id?: number, radio_channel_id?: number, position?: number) {
+      const r = await api.post<MusicPlaylistItem>(`/music/playlists/${id}/items`, { track_id, radio_channel_id, position })
       return r.data
     },
     async removeItem(id: number, item_id: number) {

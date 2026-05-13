@@ -945,10 +945,12 @@ function MusicLibraryTab() {
 
 function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; onClose: () => void }) {
   const queryClient = useQueryClient()
-  const [showAddTrack, setShowAddTrack] = useState(false)
-  const [selectedTrackId, setSelectedTrackId] = useState<number | ''>('')
+  const [showAddItem, setShowAddItem] = useState(false)
+  const [addType, setAddType] = useState<'track' | 'radio'>('track')
+  const [selectedItemId, setSelectedItemId] = useState<number | ''>('')
 
   const tracksQ = useQuery({ queryKey: ['music-tracks'], queryFn: () => musicApi.tracks.list() })
+  const radioQ = useQuery({ queryKey: ['radio'], queryFn: () => radioApi.list() })
   const detailQ = useQuery({
     queryKey: ['music-playlist-detail', playlist.id],
     queryFn: () => musicApi.playlists.get(playlist.id),
@@ -958,8 +960,8 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
   const pl: MusicPlaylist = detailQ.data ?? playlist
 
   const addItemMutation = useMutation({
-    mutationFn: ({ track_id }: { track_id: number }) => musicApi.playlists.addItem(pl.id, track_id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['music-playlist-detail', pl.id] }); setShowAddTrack(false); setSelectedTrackId('') },
+    mutationFn: ({ track_id, radio_channel_id }: { track_id?: number; radio_channel_id?: number }) => musicApi.playlists.addItem(pl.id, track_id, radio_channel_id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['music-playlist-detail', pl.id] }); setShowAddItem(false); setSelectedItemId('') },
   })
   const removeItemMutation = useMutation({
     mutationFn: (item_id: number) => musicApi.playlists.removeItem(pl.id, item_id),
@@ -989,8 +991,11 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
   })
 
   const allTracks: MusicTrack[] = tracksQ.data ?? []
-  const existingIds = new Set(pl.items.map(i => i.track_id))
-  const availableTracks = allTracks.filter(t => !existingIds.has(t.id))
+  const allRadios: RadioContent[] = radioQ.data ?? []
+  const existingTrackIds = new Set(pl.items.map(i => i.track_id).filter(Boolean))
+  const existingRadioIds = new Set(pl.items.map(i => i.radio_channel_id).filter(Boolean))
+  const availableTracks = allTracks.filter(t => !existingTrackIds.has(t.id))
+  const availableRadios = allRadios.filter(r => !existingRadioIds.has(r.id))
   const sortedItems = [...pl.items].sort((a, b) => a.position - b.position)
 
   return (
@@ -1004,6 +1009,7 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
               <h3 className="text-lg font-semibold text-slate-900">{pl.name}</h3>
             </div>
             {pl.description && <p className="mt-1 ml-11 text-sm text-slate-500">{pl.description}</p>}
+            {pl.category_name && <span className="mt-1 ml-11 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{pl.category_name}</span>}
           </div>
           <button type="button" className="rounded-full p-1 hover:bg-slate-100" onClick={onClose}><X size={18} /></button>
         </div>
@@ -1015,7 +1021,7 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
               <span className="relative flex h-3 w-3"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" /></span>
               <div className="flex-1">
                 <p className="text-xs font-semibold text-emerald-800">CANLI YAYIN</p>
-                {detailQ.data.items.length > 0 && <p className="text-sm text-emerald-700 truncate">{detailQ.data.items[0]?.track?.title}</p>}
+                {detailQ.data.items.length > 0 && detailQ.data.items[0]?.track && <p className="text-sm text-emerald-700 truncate">{detailQ.data.items[0]?.track?.title}</p>}
               </div>
               {pl.stream_url && <span className="text-xs font-mono text-emerald-600 truncate max-w-[140px]">{pl.stream_url}</span>}
             </div>
@@ -1026,21 +1032,29 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
         <div className="flex-1 overflow-y-auto px-6">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700">{sortedItems.length} Parca</p>
-            <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => setShowAddTrack(v => !v)}>
-              <Plus size={13} />Parca Ekle
+            <button type="button" className="secondary-button px-3 py-2 text-xs" onClick={() => setShowAddItem(v => !v)}>
+              <Plus size={13} />Ekle
             </button>
           </div>
 
-          {showAddTrack && (
-            <div className="mb-4 rounded-2xl border border-slate-200 p-4">
-              <p className="mb-2 text-sm font-medium text-slate-700">Kutuphaneden Sec</p>
+          {showAddItem && (
+            <div className="mb-4 rounded-2xl border border-slate-200 p-4 space-y-3">
               <div className="flex gap-2">
-                <select className="panel-select flex-1" value={selectedTrackId} onChange={e => setSelectedTrackId(e.target.value ? Number(e.target.value) : '')}>
-                  <option value="">Parca seciniz...</option>
-                  {availableTracks.map(t => <option key={t.id} value={t.id}>{t.title}{t.artist ? ` — ${t.artist}` : ''}</option>)}
+                <button type="button" className={`rounded-xl px-3 py-1.5 text-xs font-medium ${addType === 'track' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => { setAddType('track'); setSelectedItemId('') }}>Muzik Parcasi</button>
+                <button type="button" className={`rounded-xl px-3 py-1.5 text-xs font-medium ${addType === 'radio' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => { setAddType('radio'); setSelectedItemId('') }}>Radyo Kanali</button>
+              </div>
+              <div className="flex gap-2">
+                <select className="panel-select flex-1" value={selectedItemId} onChange={e => setSelectedItemId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">{addType === 'track' ? 'Parca seciniz...' : 'Radyo kanali seciniz...'}</option>
+                  {addType === 'track'
+                    ? availableTracks.map(t => <option key={t.id} value={t.id}>{t.title}{t.artist ? ` — ${t.artist}` : ''}</option>)
+                    : availableRadios.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                 </select>
-                <button type="button" className="primary-button px-4" disabled={!selectedTrackId || addItemMutation.isPending}
-                  onClick={() => selectedTrackId && addItemMutation.mutate({ track_id: Number(selectedTrackId) })}>
+                <button type="button" className="primary-button px-4" disabled={!selectedItemId || addItemMutation.isPending}
+                  onClick={() => {
+                    if (addType === 'track') addItemMutation.mutate({ track_id: Number(selectedItemId) })
+                    else addItemMutation.mutate({ radio_channel_id: Number(selectedItemId) })
+                  }}>
                   Ekle
                 </button>
               </div>
@@ -1051,12 +1065,18 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
             {sortedItems.map((item, idx) => (
               <div key={item.id} className="flex items-center gap-3 py-3">
                 <span className="w-6 text-center text-xs font-mono text-slate-400">{idx + 1}</span>
-                {item.track.cover_url
+                {item.track && item.track.cover_url
                   ? <img src={item.track.cover_url} alt="" className="h-9 w-9 rounded-xl object-cover flex-shrink-0" />
-                  : <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-sky-100 flex-shrink-0"><Music size={14} className="text-violet-400" /></span>}
+                  : item.radio_channel && item.radio_channel.logo_url
+                    ? <img src={item.radio_channel.logo_url} alt="" className="h-9 w-9 rounded-xl object-cover flex-shrink-0" />
+                    : <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-sky-100 flex-shrink-0"><Music size={14} className="text-violet-400" /></span>}
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{item.track.title}</p>
-                  <p className="text-xs text-slate-400">{item.track.artist ?? ''}{item.track.duration_seconds ? ` · ${fmtDuration(item.track.duration_seconds)}` : ''}</p>
+                  <p className="truncate text-sm font-medium text-slate-900">{item.track?.title ?? item.radio_channel?.title ?? 'Bilinmeyen'}</p>
+                  <p className="text-xs text-slate-400">
+                    {item.track
+                      ? `${item.track.artist ?? ''}${item.track.duration_seconds ? ` · ${fmtDuration(item.track.duration_seconds)}` : ''}`
+                      : <span className="inline-flex items-center gap-1"><Radio size={10} />Radyo Kanali</span>}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button type="button" className="rounded-xl p-1.5 hover:bg-slate-100 text-slate-400 disabled:opacity-30" disabled={idx === 0} onClick={() => moveUpMutation.mutate(item.id)}><ChevronUp size={14} /></button>
@@ -1066,7 +1086,7 @@ function PlaylistDetailModal({ playlist, onClose }: { playlist: MusicPlaylist; o
               </div>
             ))}
             {sortedItems.length === 0 && (
-              <p className="py-10 text-center text-sm text-slate-400">Playlist bos. Yukaridan parca ekleyin.</p>
+              <p className="py-10 text-center text-sm text-slate-400">Playlist bos. Yukaridan parca veya radyo kanali ekleyin.</p>
             )}
           </div>
         </div>
@@ -1084,7 +1104,8 @@ function MusicPlaylistsTab() {
   const [editItem, setEditItem] = useState<MusicPlaylist | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [detailPlaylist, setDetailPlaylist] = useState<MusicPlaylist | null>(null)
-  const [form, setForm] = useState<MusicPlaylistCreate>({ name: '', description: null, visual_url: null, visual_type: 'none', server_id: null })
+  const [bouquetId, setBouquetId] = useState<number | ''>('')
+  const [form, setForm] = useState<MusicPlaylistCreate>({ name: '', description: null, visual_url: null, visual_type: 'none', server_id: null, category_id: null })
 
   const playlistsQ = useQuery({
     queryKey: ['music-playlists'],
@@ -1092,6 +1113,8 @@ function MusicPlaylistsTab() {
     refetchInterval: 10000,
   })
   const serversQ = useQuery({ queryKey: ['servers'], queryFn: () => serversApi.list() })
+  const categoriesQ = useQuery({ queryKey: ['categories', 'radio'], queryFn: () => contentApi.listCategories('radio') })
+  const bouquetsQ = useQuery({ queryKey: ['bouquets'], queryFn: () => contentApi.listBouquets() })
 
   // Per-playlist status polling for playing playlists
   const statusQueries = useQuery({
@@ -1142,16 +1165,20 @@ function MusicPlaylistsTab() {
       queryClient.invalidateQueries({ queryKey: ['music-playlists-status'] })
     },
   })
+  const addToBouquetMutation = useMutation({
+    mutationFn: ({ playlistId, bqId }: { playlistId: number; bqId: number }) => contentApi.addBouquetItems(bqId, [{ item_type: 'music_playlist', item_id: playlistId }]),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['bouquets'] }); setBouquetId('') },
+  })
 
   const playlists: MusicPlaylist[] = playlistsQ.data ?? []
   const servers: Server[] = serversQ.data ?? []
   const statusMap = statusQueries.data ?? {}
 
-  function resetForm() { setForm({ name: '', description: null, visual_url: null, visual_type: 'none', server_id: null }) }
+  function resetForm() { setForm({ name: '', description: null, visual_url: null, visual_type: 'none', server_id: null, category_id: null }) }
 
   function openEdit(item: MusicPlaylist) {
     setEditItem(item)
-    setForm({ name: item.name, description: item.description, visual_url: item.visual_url, visual_type: item.visual_type, server_id: item.server_id })
+    setForm({ name: item.name, description: item.description, visual_url: item.visual_url, visual_type: item.visual_type, server_id: item.server_id, category_id: item.category_id })
   }
 
   const pending = addMutation.isPending || editMutation.isPending
@@ -1186,6 +1213,15 @@ function MusicPlaylistsTab() {
               <select className="panel-select" value={form.server_id ?? ''} onChange={e => setForm(f => ({ ...f, server_id: e.target.value ? Number(e.target.value) : null }))}>
                 <option value="">Varsayilan</option>
                 {servers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="panel-label">Kategori</label>
+              <select className="panel-select" value={form.category_id ?? ''} onChange={e => setForm(f => ({ ...f, category_id: e.target.value ? Number(e.target.value) : null }))}>
+                <option value="">Seciniz</option>
+                {(categoriesQ.data ?? []).map((c: Category) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           </div>
@@ -1263,6 +1299,7 @@ function MusicPlaylistsTab() {
                     <span className="flex items-center gap-1"><Users size={11} />0 izleyici</span>
                     <VisualTypeBadge type={pl.visual_type} />
                     {serverName && <span className="text-slate-400">{serverName}</span>}
+                    {pl.category_name && <span className="text-slate-400">{pl.category_name}</span>}
                   </div>
                 </div>
               </div>
@@ -1318,6 +1355,18 @@ function MusicPlaylistsTab() {
                 </button>
                 <button type="button" className="danger-button px-3 py-2 text-xs" onClick={() => setDeleteId(pl.id)}>
                   <Trash2 size={13} />
+                </button>
+              </div>
+
+              {/* bouquet assignment */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <select className="panel-select flex-1 text-xs py-1.5" value={bouquetId} onChange={e => setBouquetId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">Bouquet seciniz...</option>
+                  {(bouquetsQ.data ?? []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <button type="button" className="secondary-button px-3 py-1.5 text-xs" disabled={!bouquetId || addToBouquetMutation.isPending}
+                  onClick={() => { if (bouquetId) addToBouquetMutation.mutate({ playlistId: pl.id, bqId: Number(bouquetId) }) }}>
+                  Ekle
                 </button>
               </div>
             </div>

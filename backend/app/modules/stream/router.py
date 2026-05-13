@@ -597,10 +597,32 @@ def get_m3u_plus(
                 lines.append(extinf)
                 lines.append(stream_url)
             elif item_type == "radio":
+                channel = (
+                    db.query(RadioContent)
+                    .options(joinedload(RadioContent.category))
+                    .filter(RadioContent.id == item.item_id)
+                    .first()
+                )
+                group = channel.category.name if channel and channel.category else bouquet.name
                 stream_url = f"{base}/live/radio/{username}/{password}/{item.item_id}.m3u8"
                 extinf = (
                     f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
-                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                    f'tvg-logo="{logo}" group-title="{group}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
+            elif item_type == "music_playlist":
+                pl = (
+                    db.query(MusicPlaylist)
+                    .options(joinedload(MusicPlaylist.category))
+                    .filter(MusicPlaylist.id == item.item_id)
+                    .first()
+                )
+                group = pl.category.name if pl and pl.category else bouquet.name
+                stream_url = f"{base}/radio/{username}/{password}/{item.item_id}.m3u8"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{group}",{title}'
                 )
                 lines.append(extinf)
                 lines.append(stream_url)
@@ -712,6 +734,30 @@ def get_m3u_plus(
                 )
                 lines.append(extinf)
                 lines.append(f"{base}/series/{username}/{password}/{series_obj.id}.mp4")
+        # Radio fallback
+        radios = db.query(RadioContent).options(joinedload(RadioContent.category)).all()
+        for radio in radios:
+            logo = radio.logo_url or ""
+            group = radio.category.name if radio.category else "Radio"
+            stream_url = f"{base}/live/radio/{username}/{password}/{radio.id}.m3u8"
+            extinf = (
+                f'#EXTINF:-1 tvg-id="{radio.id}" tvg-name="{radio.title}" '
+                f'tvg-logo="{logo}" group-title="{group}",{radio.title}'
+            )
+            lines.append(extinf)
+            lines.append(stream_url)
+        # Music playlists fallback
+        playlists = db.query(MusicPlaylist).options(joinedload(MusicPlaylist.category)).all()
+        for pl in playlists:
+            logo = ""
+            group = pl.category.name if pl.category else "Music"
+            stream_url = f"{base}/radio/{username}/{password}/{pl.id}.m3u8"
+            extinf = (
+                f'#EXTINF:-1 tvg-id="{pl.id}" tvg-name="{pl.name}" '
+                f'tvg-logo="{logo}" group-title="{group}",{pl.name}'
+            )
+            lines.append(extinf)
+            lines.append(stream_url)
 
     return "\n".join(lines) + "\n"
 

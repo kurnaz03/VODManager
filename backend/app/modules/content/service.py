@@ -380,6 +380,9 @@ def _get_item_metadata(db: Session, item_type: str, item_id: int) -> tuple[str |
             from app.modules.playlist.models import Playlist
             obj = db.query(Playlist).filter(Playlist.id == item_id).first()
             return (obj.name, None) if obj else (None, None)
+        elif item_type == "music_playlist":
+            obj = db.query(MusicPlaylist).filter(MusicPlaylist.id == item_id).first()
+            return (obj.name, None) if obj else (None, None)
     except Exception:
         pass
     return (None, None)
@@ -905,12 +908,15 @@ def delete_music_track(db: Session, track_id: int) -> None:
 
 def _serialize_playlist_item(pi: MusicPlaylistItem) -> dict[str, Any]:
     track = pi.track
+    radio = pi.radio_channel
     return {
         "id": pi.id,
         "playlist_id": pi.playlist_id,
         "track_id": pi.track_id,
+        "radio_channel_id": pi.radio_channel_id,
         "position": pi.position,
         "track": _serialize_track(track) if track else None,
+        "radio_channel": _serialize_radio(radio) if radio else None,
     }
 
 
@@ -927,6 +933,8 @@ def _serialize_playlist(pl: MusicPlaylist) -> dict[str, Any]:
         "stream_url": pl.stream_url,
         "status": pl.status,
         "started_at": pl.started_at,
+        "category_id": pl.category_id,
+        "category_name": pl.category.name if pl.category else None,
         "created_at": pl.created_at,
         "items": [_serialize_playlist_item(pi) for pi in pl.items],
     }
@@ -936,7 +944,9 @@ def _get_playlist(db: Session, playlist_id: int) -> MusicPlaylist:
     pl = (
         db.query(MusicPlaylist)
         .options(
-            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)
+            joinedload(MusicPlaylist.category),
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category),
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.radio_channel).joinedload(RadioContent.category),
         )
         .filter(MusicPlaylist.id == playlist_id)
         .first()
@@ -950,7 +960,9 @@ def list_music_playlists(db: Session) -> list[dict[str, Any]]:
     playlists = (
         db.query(MusicPlaylist)
         .options(
-            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)
+            joinedload(MusicPlaylist.category),
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category),
+            joinedload(MusicPlaylist.items).joinedload(MusicPlaylistItem.radio_channel).joinedload(RadioContent.category),
         )
         .order_by(MusicPlaylist.created_at.desc())
         .all()
@@ -993,25 +1005,42 @@ def delete_music_playlist(db: Session, playlist_id: int) -> None:
 
 def add_playlist_item(db: Session, playlist_id: int, payload: MusicPlaylistItemCreate) -> dict[str, Any]:
     _get_playlist(db, playlist_id)
-    track = db.query(MusicTrack).filter(MusicTrack.id == payload.track_id).first()
-    if track is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik parcasi bulunamadi")
-    existing = db.query(MusicPlaylistItem).filter(
-        MusicPlaylistItem.playlist_id == playlist_id,
-        MusicPlaylistItem.track_id == payload.track_id,
-    ).first()
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bu parca zaten playlist icinde mevcut")
+    if payload.track_id:
+        track = db.query(MusicTrack).filter(MusicTrack.id == payload.track_id).first()
+        if track is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Muzik parcasi bulunamadi")
+        existing = db.query(MusicPlaylistItem).filter(
+            MusicPlaylistItem.playlist_id == playlist_id,
+            MusicPlaylistItem.track_id == payload.track_id,
+        ).first()
+        if existing is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bu parca zaten playlist icinde mevcut")
+    elif payload.radio_channel_id:
+        radio = db.query(RadioContent).filter(RadioContent.id == payload.radio_channel_id).first()
+        if radio is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Radyo kanali bulunamadi")
+        existing = db.query(MusicPlaylistItem).filter(
+            MusicPlaylistItem.playlist_id == playlist_id,
+            MusicPlaylistItem.radio_channel_id == payload.radio_channel_id,
+        ).first()
+        if existing is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bu radyo kanali zaten playlist icinde mevcut")
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="track_id veya radio_channel_id gereklidir")
+
     if payload.position == 0:
         max_pos = db.query(func.max(MusicPlaylistItem.position)).filter(MusicPlaylistItem.playlist_id == playlist_id).scalar() or 0
         position = max_pos + 1
     else:
         position = payload.position
-    pi = MusicPlaylistItem(playlist_id=playlist_id, track_id=payload.track_id, position=position)
+    pi = MusicPlaylistItem(playlist_id=playlist_id, track_id=payload.track_id, radio_channel_id=payload.radio_channel_id, position=position)
     db.add(pi)
     db.commit()
     db.refresh(pi)
-    pi_loaded = db.query(MusicPlaylistItem).options(joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category)).filter(MusicPlaylistItem.id == pi.id).first()
+    pi_loaded = db.query(MusicPlaylistItem).options(
+        joinedload(MusicPlaylistItem.track).joinedload(MusicTrack.category),
+        joinedload(MusicPlaylistItem.radio_channel).joinedload(RadioContent.category),
+    ).filter(MusicPlaylistItem.id == pi.id).first()
     return _serialize_playlist_item(pi_loaded)
 
 
