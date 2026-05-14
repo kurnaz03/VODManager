@@ -26,6 +26,7 @@ import VpnClientsPage from '../../modules/vpn/pages/VpnClientsPage'
 import TvChannelsPage from '../../modules/tv/pages/TvChannelsPage'
 import BackupsPage from '../../modules/backups/pages/BackupsPage'
 import TorrentPage from '../../modules/torrent/pages/TorrentPage'
+import NowPlayingPage from '../../modules/playlist/pages/NowPlayingPage'
 
 type AppStatus = 'loading' | 'setup' | 'login' | 'dashboard'
 
@@ -126,6 +127,7 @@ function AppRouter() {
         <Route path="/transcode-profiles" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TranscodeProfilesPage /></AuthRoute>} />
         <Route path="/transcode" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TranscodeJobsPage /></AuthRoute>} />
         <Route path="/playlists" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><PlaylistPage /></AuthRoute>} />
+        <Route path="/now-playing" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><NowPlayingPage /></AuthRoute>} />
         <Route path="/settings" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><SettingsPage /></AuthRoute>} />
         <Route path="/vpn-clients" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><VpnClientsPage /></AuthRoute>} />
         <Route path="/tv-channels" element={<AuthRoute status={status} isAuthenticated={isAuthenticated}><TvChannelsPage /></AuthRoute>} />

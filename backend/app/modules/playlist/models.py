@@ -50,3 +50,20 @@ class PlaylistItem(Base):
 
     playlist = relationship("Playlist", back_populates="items")
     transcode_job = relationship("TranscodeJob")
+
+
+class InfoScreenTemplate(Base):
+    __tablename__ = "info_screen_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    is_default = Column(Boolean, nullable=False, default=False)
+    bg_image_url = Column(String(1000), nullable=True)
+    title_text = Column(String(100), nullable=False, default="ŞU ANDA YAYINDA OLANLAR")
+    subtitle_text = Column(String(100), nullable=True, default="SİNEMA KANALLARI")
+    primary_color = Column(String(20), nullable=False, default="#D4A843")
+    bg_overlay_opacity = Column(Integer, nullable=False, default=70)
+    font_family = Column(String(50), nullable=False, default="serif")
+    layout = Column(String(30), nullable=False, default="cinema")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

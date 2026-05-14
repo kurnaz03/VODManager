@@ -639,6 +639,55 @@ def generate_epg_programs(db: Session, playlist_id: int) -> list[dict[str, Any]]
     return programs
 
 
+def get_all_now_playing(db: Session) -> list[dict[str, Any]]:
+    """
+    Return current now-playing info for all playlists.
+    """
+    from datetime import timedelta
+
+    playlists = db.query(Playlist).options(joinedload(Playlist.items)).all()
+    results = []
+    now = datetime.now(timezone.utc)
+
+    for idx, pl in enumerate(sorted(playlists, key=lambda p: p.id), start=1):
+        items = sorted(pl.items, key=lambda i: i.position)
+        if not items:
+            continue
+
+        current_title: str | None = None
+        current_poster: str | None = None
+        current_overview: str | None = None
+
+        if pl.started_at and pl.status == "playing":
+            started = pl.started_at
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            elapsed = int((now - started).total_seconds())
+            total_dur = pl.total_duration_seconds or 1
+            loop_pos = elapsed % total_dur if total_dur > 0 else 0
+            cumulative = 0
+            for item in items:
+                cumulative += item.duration_seconds
+                if loop_pos < cumulative:
+                    current_title = item.tmdb_title or item.title
+                    current_poster = item.tmdb_poster_url
+                    current_overview = item.tmdb_overview
+                    break
+
+        results.append({
+            "channel_number": idx,
+            "playlist_id": pl.id,
+            "playlist_name": pl.name,
+            "stream_url": pl.stream_url,
+            "status": pl.status,
+            "current_title": current_title,
+            "current_poster": current_poster,
+            "current_overview": current_overview,
+        })
+
+    return results
+
+
 def update_broadcast_list(db: Session, playlist_id: int) -> dict[str, Any]:
     pl = _load_playlist(db, playlist_id)
     items = sorted(pl.items, key=lambda i: i.position)

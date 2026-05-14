@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.config import settings
 from app.core.database import Base
+from app.modules.playlist.models import InfoScreenTemplate  # noqa: F401
+from app.modules.torrent.models import TorrentDownload  # noqa: F401
 from app.modules.users.models import (  # noqa: F401
     User, Role, UserRoleAssignment, RefreshToken, SystemSetting, ActivityLog
 )

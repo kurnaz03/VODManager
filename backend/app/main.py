@@ -29,6 +29,7 @@ from app.modules.openvpn.models import VpnClient, VpnServerConfig  # noqa: F401
 from app.modules.tv.models import TvChannel, TvChannelServer, TvChannelBouquet  # noqa: F401
 from app.modules.backups.models import Backup  # noqa: F401
 from app.modules.torrent.models import TorrentDownload  # noqa: F401
+from app.modules.playlist.models import InfoScreenTemplate  # noqa: F401
 from app.modules.roles.seed import seed_roles
 from app.api.v1.router import api_router
 from app.modules.stream.router import router as stream_router
@@ -37,6 +38,7 @@ from app.modules.content.seed import ensure_default_categories
 from app.modules.transcode.service import ensure_default_vod_profile
 from app.modules.dashboard.geoip import load_csv as load_geoip_csv
 from app.modules.torrent.service import start_session_and_monitor
+from app.modules.playlist.service import ensure_default_info_screen_template
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -55,6 +57,7 @@ async def lifespan(app: FastAPI):
         ensure_main_server(db)
         ensure_default_categories(db)
         ensure_default_vod_profile(db)
+        ensure_default_info_screen_template(db)
     finally:
         db.close()
 

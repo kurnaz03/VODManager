@@ -6,9 +6,26 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.modules.playlist.models import Playlist, PlaylistItem
+from app.modules.playlist.models import Playlist, PlaylistItem, InfoScreenTemplate
 from app.modules.playlist.schemas import PlaylistCreate, PlaylistItemAdd, PlaylistItemReorder, PlaylistUpdate
 from app.modules.transcode.models import TranscodeJob
+
+
+def ensure_default_info_screen_template(db: Session) -> None:
+    existing = db.query(InfoScreenTemplate).filter_by(is_default=True).first()
+    if not existing:
+        db.add(InfoScreenTemplate(
+            name="Sinema (Varsayılan)",
+            is_default=True,
+            bg_image_url=None,
+            title_text="ŞU ANDA YAYINDA OLANLAR",
+            subtitle_text="SİNEMA KANALLARI",
+            primary_color="#D4A843",
+            bg_overlay_opacity=70,
+            font_family="serif",
+            layout="cinema",
+        ))
+        db.commit()
 
 
 def _get_stream_info(pl: Playlist) -> dict[str, Any] | None:

@@ -306,6 +306,34 @@ def unassign_bouquet(db: Session, user_id: int, bouquet_id: int) -> None:
     db.commit()
 
 
+def _get_item_stream_url(db: Session, item_type: str, item_id: int, server_host: str, username: str, password: str, fmt: str) -> str | None:
+    """Return the stream URL for a bouquet item.
+
+    For music_playlist and radio items the real stream_url stored in the DB is
+    returned directly.  For all other types the Xtream-Codes proxy URL is built
+    as before.
+    """
+    try:
+        if item_type == "music_playlist":
+            from app.modules.content.models import MusicPlaylist
+            obj = db.query(MusicPlaylist).filter(MusicPlaylist.id == item_id).first()
+            if obj and obj.stream_url:
+                return obj.stream_url
+            return None
+        elif item_type == "radio":
+            from app.modules.content.models import RadioContent
+            obj = db.query(RadioContent).filter(RadioContent.id == item_id).first()
+            if obj and obj.stream_url:
+                return obj.stream_url
+            return None
+    except Exception:
+        pass
+    # Default: Xtream-Codes proxy URL
+    if fmt == "m3u8":
+        return f"http://{server_host}/{username}/{password}/{item_id}/index.m3u8"
+    return f"http://{server_host}/{username}/{password}/{item_id}.ts"
+
+
 def generate_m3u(db: Session, user_id: int, server_host: str, fmt: str = "m3u_plus") -> str:
     """Generate M3U playlist for the user's bouquets."""
     user = _load_user(db, user_id)
@@ -323,9 +351,9 @@ def generate_m3u(db: Session, user_id: int, server_host: str, fmt: str = "m3u_pl
             title, logo = _get_item_metadata(db, item_type, item.item_id)
             title = title or f"Item {item.item_id}"
             logo = logo or ""
-            stream_url = f"http://{server_host}/{user.username}/{user.password}/{item.item_id}.ts"
-            if fmt == "m3u8":
-                stream_url = f"http://{server_host}/{user.username}/{user.password}/{item.item_id}/index.m3u8"
+            stream_url = _get_item_stream_url(db, item_type, item.item_id, server_host, user.username, user.password, fmt)
+            if not stream_url:
+                continue
             extinf = (
                 f"#EXTINF:-1 tvg-id=\"{item.item_id}\" tvg-name=\"{title}\" "
                 f"tvg-logo=\"{logo}\" group-title=\"{bouquet_name}\",{title}"

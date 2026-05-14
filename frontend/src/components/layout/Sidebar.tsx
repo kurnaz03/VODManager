@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sliders,
   SlidersHorizontal,
+  Tv2,
   UserCog,
   Wrench,
   X,
@@ -53,6 +54,7 @@ const groups = [
           { to: '/transcode', label: 'Transcode', icon: Sliders },
           { to: '/transcode-profiles', label: 'Transcode Profiller', icon: SlidersHorizontal },
           { to: '/playlists', label: 'VOD Channel', icon: ListVideo },
+          { to: '/now-playing', label: 'Info Ekrani', icon: Tv2 },
         ],
       },
       {
@@ -87,7 +89,7 @@ const groups = [
   },
 ]
 
-const ARACLAR_PATHS = ['/downloads', '/torrent', '/transcode', '/transcode-profiles', '/playlists']
+const ARACLAR_PATHS = ['/downloads', '/torrent', '/transcode', '/transcode-profiles', '/playlists', '/now-playing']
 const MEDYA_PATHS = ['/movies', '/series', '/tv-channels', '/radio']
 const ORG_PATHS = ['/categories', '/bouquets']
 

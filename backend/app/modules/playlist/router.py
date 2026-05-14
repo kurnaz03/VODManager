@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from pathlib import Path
+import uuid
 
 from app.core.database import get_db
 from app.modules.auth.router import get_current_user_id
 from app.modules.playlist import service
 from app.modules.playlist import broadcast
-from app.modules.playlist.schemas import PlaylistCreate, PlaylistItemAdd, PlaylistItemReorder, PlaylistUpdate
+from app.modules.playlist.schemas import (
+    PlaylistCreate, PlaylistItemAdd, PlaylistItemReorder, PlaylistUpdate,
+    InfoScreenTemplateCreate, InfoScreenTemplateUpdate, InfoScreenTemplateResponse,
+)
+from app.modules.playlist.models import InfoScreenTemplate
 
 router = APIRouter(
     prefix="/playlists",
@@ -88,6 +94,13 @@ def update_broadcast_list(playlist_id: int, db: Session = Depends(get_db)):
     return broadcast.update_broadcast_list(db, playlist_id)
 
 
+# ── Now Playing ───────────────────────────────────────────────────────────────
+
+@router.get("/now-playing")
+def get_all_now_playing(db: Session = Depends(get_db)):
+    return broadcast.get_all_now_playing(db)
+
+
 # ── EPG ───────────────────────────────────────────────────────────────────────
 
 @router.get("/{playlist_id}/epg/programs")
@@ -125,3 +138,70 @@ def download_epg(playlist_id: int, db: Session = Depends(get_db)):
         media_type="application/xml",
         headers={"Content-Disposition": f"attachment; filename=epg_playlist_{playlist_id}.xml"},
     )
+
+
+# ── Info Screen Templates ─────────────────────────────────────────────────────
+
+@router.get("/info-screen/templates", response_model=list[InfoScreenTemplateResponse])
+def list_templates(db: Session = Depends(get_db)):
+    return db.query(InfoScreenTemplate).order_by(InfoScreenTemplate.id.desc()).all()
+
+
+@router.post("/info-screen/templates", status_code=status.HTTP_201_CREATED, response_model=InfoScreenTemplateResponse)
+def create_template(payload: InfoScreenTemplateCreate, db: Session = Depends(get_db)):
+    if payload.is_default:
+        db.query(InfoScreenTemplate).update({InfoScreenTemplate.is_default: False})
+    tmpl = InfoScreenTemplate(**payload.model_dump())
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@router.put("/info-screen/templates/{template_id}", response_model=InfoScreenTemplateResponse)
+def update_template(template_id: int, payload: InfoScreenTemplateUpdate, db: Session = Depends(get_db)):
+    tmpl = db.query(InfoScreenTemplate).filter(InfoScreenTemplate.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template bulunamadi")
+    if payload.is_default:
+        db.query(InfoScreenTemplate).update({InfoScreenTemplate.is_default: False})
+    for key, value in payload.model_dump().items():
+        setattr(tmpl, key, value)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@router.delete("/info-screen/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    tmpl = db.query(InfoScreenTemplate).filter(InfoScreenTemplate.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template bulunamadi")
+    db.delete(tmpl)
+    db.commit()
+
+
+@router.post("/info-screen/templates/{template_id}/set-default")
+def set_default_template(template_id: int, db: Session = Depends(get_db)):
+    tmpl = db.query(InfoScreenTemplate).filter(InfoScreenTemplate.id == template_id).first()
+    if not tmpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template bulunamadi")
+    db.query(InfoScreenTemplate).update({InfoScreenTemplate.is_default: False})
+    tmpl.is_default = True
+    db.commit()
+    return {"ok": True}
+
+
+UPLOADS_DIR = Path("/var/www/vod-manager/shared/uploads")
+BG_DIR = UPLOADS_DIR / "info-screen-bg"
+
+
+@router.post("/info-screen/upload-bg")
+def upload_background(file: UploadFile = File(...)):
+    BG_DIR.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "bg.jpg").suffix
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = BG_DIR / filename
+    with dest.open("wb") as f:
+        f.write(file.file.read())
+    return {"url": f"/uploads/info-screen-bg/{filename}"}

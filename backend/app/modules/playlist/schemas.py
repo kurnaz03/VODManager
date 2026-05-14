@@ -71,3 +71,34 @@ class BroadcastStatusResponse(BaseModel):
     current_item_index: int
     current_title: str | None
     is_running: bool
+
+
+# ── Info Screen Templates ────────────────────────────────────────────────────
+
+class InfoScreenTemplateBase(BaseModel):
+    name: str
+    is_default: bool = False
+    bg_image_url: str | None = None
+    title_text: str = "ŞU ANDA YAYINDA OLANLAR"
+    subtitle_text: str | None = None
+    primary_color: str = "#D4A843"
+    bg_overlay_opacity: int = 70
+    font_family: str = "serif"
+    layout: str = "cinema"
+
+
+class InfoScreenTemplateCreate(InfoScreenTemplateBase):
+    pass
+
+
+class InfoScreenTemplateUpdate(InfoScreenTemplateBase):
+    pass
+
+
+class InfoScreenTemplateResponse(InfoScreenTemplateBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
