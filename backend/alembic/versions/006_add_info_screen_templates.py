@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "006_add_info_screen_templates"
-down_revision: Union[str, None] = "005_torrent_manual_season_episode"
+down_revision: Union[str, None] = "005_torrent_season_episode"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

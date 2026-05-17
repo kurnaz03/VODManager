@@ -626,6 +626,14 @@ def get_m3u_plus(
                 )
                 lines.append(extinf)
                 lines.append(stream_url)
+            elif item_type == "info_screen":
+                stream_url = f"{base}/live/{username}/{password}/{item.item_id}.m3u8"
+                extinf = (
+                    f'#EXTINF:-1 tvg-id="{item.item_id}" tvg-name="{title}" '
+                    f'tvg-logo="{logo}" group-title="{bouquet.name}",{title}'
+                )
+                lines.append(extinf)
+                lines.append(stream_url)
             else:
                 stream_url = f"{base}/live/{username}/{password}/{item.item_id}.ts"
                 extinf = (
@@ -767,6 +775,27 @@ def get_m3u_plus(
 @router.get("/live/{username}/{password}/{item_id}.m3u8", tags=["stream"])
 async def serve_live(username: str, password: str, item_id: int, request: Request, db: Session = Depends(get_db)):
     user = _auth_iptv_user(db, username, password)
+
+    # ── info_screen özel işleme ─────────────────────────────────────────────
+    if _check_item_access(db, user, "info_screen", item_id):
+        _do_checks_and_record(db, user, request, item_id, "info_screen", "Info Screen")
+        hls_path = f"{HLS_BASE_DIR}/info_screen/stream.m3u8"
+        if os.path.isfile(hls_path):
+            with open(hls_path, "r") as f:
+                m3u8_content = f.read()
+            hls_base = f"http://{_server_host(db)}:{_server_port()}/hls/info_screen/"
+            rewritten_lines = []
+            for line in m3u8_content.splitlines():
+                if line.strip() and not line.startswith("#"):
+                    rewritten_lines.append(hls_base + line.strip())
+                else:
+                    rewritten_lines.append(line)
+            return Response(
+                content="\n".join(rewritten_lines) + "\n",
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache"},
+            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Info screen stream bulunamadi")
 
     if _check_item_access(db, user, "vod_channel", item_id):
         playlist = db.query(Playlist).filter(Playlist.id == item_id).first()

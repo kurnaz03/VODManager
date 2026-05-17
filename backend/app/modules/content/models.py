@@ -89,6 +89,7 @@ class BouquetItemType(str, enum.Enum):
     radio = "radio"
     movie = "movie"
     music_playlist = "music_playlist"
+    info_screen = "info_screen"
 
 
 class BouquetItem(Base):

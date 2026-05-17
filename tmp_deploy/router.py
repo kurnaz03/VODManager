@@ -32,15 +32,21 @@ BG_DIR = UPLOADS_DIR / "info-screen-bg"
 
 
 def _ensure_bouquet_item(db: Session, bouquet_id: int, template_id: int) -> None:
-    """Bouquet'e info_screen item ekler; önce tüm info_screen item'larını siler (upsert)."""
+    """Bouquet'e info_screen item ekler, zaten varsa ekleme."""
     from app.modules.content.models import BouquetItem, BouquetItemType
+    existing = (
+        db.query(BouquetItem)
+        .filter(
+            BouquetItem.bouquet_id == bouquet_id,
+            BouquetItem.item_type == BouquetItemType.info_screen,
+            BouquetItem.item_id == template_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+    # Mevcut max position bul
     from sqlalchemy import func as sqlfunc
-    # Önce bu bouquet'teki tüm info_screen item'larını sil
-    db.query(BouquetItem).filter(
-        BouquetItem.bouquet_id == bouquet_id,
-        BouquetItem.item_type == BouquetItemType.info_screen,
-    ).delete(synchronize_session=False)
-    # Yenisini ekle
     max_pos = db.query(sqlfunc.max(BouquetItem.position)).filter(
         BouquetItem.bouquet_id == bouquet_id
     ).scalar() or 0
@@ -96,10 +102,10 @@ def create_template(payload: InfoScreenTemplateCreate, db: Session = Depends(get
     if tmpl.bouquet_id:
         try:
             _ensure_bouquet_item(db, tmpl.bouquet_id, tmpl.id)
-            db.commit()
         except Exception:
-            db.rollback()
+            pass
 
+    db.commit()
     db.refresh(tmpl)
     return tmpl
 
@@ -121,17 +127,16 @@ def update_template(template_id: int, payload: InfoScreenTemplateUpdate, db: Ses
     if tmpl.bouquet_id and tmpl.bouquet_id != old_bouquet_id:
         try:
             _ensure_bouquet_item(db, tmpl.bouquet_id, tmpl.id)
-            db.commit()
         except Exception:
-            db.rollback()
+            pass
     elif tmpl.bouquet_id and old_bouquet_id == tmpl.bouquet_id:
         # Aynı bouquet, yine de kontrol et (ilk kez eklenmiş olabilir)
         try:
             _ensure_bouquet_item(db, tmpl.bouquet_id, tmpl.id)
-            db.commit()
         except Exception:
-            db.rollback()
+            pass
 
+    db.commit()
     db.refresh(tmpl)
     return tmpl
 
@@ -171,7 +176,17 @@ def upload_background(file: UploadFile = File(...)):
 
 @router.post("/info-screen/stream/start")
 def start_info_screen_stream(db: Session = Depends(get_db)):
-    return info_screen_broadcast.start_info_screen_stream(db)
+    # Aktif (default) template'ın server_id'sini kontrol et
+    tmpl = (
+        db.query(InfoScreenTemplate)
+        .filter(InfoScreenTemplate.is_default == True)
+        .first()
+    )
+    if tmpl is None:
+        tmpl = db.query(InfoScreenTemplate).order_by(InfoScreenTemplate.id.asc()).first()
+
+    server_id = tmpl.server_id if tmpl else None
+    return info_screen_broadcast.start_info_screen_stream(db, server_id=server_id)
 
 
 @router.post("/info-screen/stream/stop")

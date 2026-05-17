@@ -40,6 +40,7 @@ const groups = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/servers', label: 'Sunucular', icon: MonitorDot },
+      { to: '/now-playing', label: 'Info Ekrani', icon: Tv2 },
     ],
   },
   {
@@ -54,7 +55,6 @@ const groups = [
           { to: '/transcode', label: 'Transcode', icon: Sliders },
           { to: '/transcode-profiles', label: 'Transcode Profiller', icon: SlidersHorizontal },
           { to: '/playlists', label: 'VOD Channel', icon: ListVideo },
-          { to: '/now-playing', label: 'Info Ekrani', icon: Tv2 },
         ],
       },
       {

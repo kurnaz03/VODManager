@@ -15,8 +15,7 @@ import {
   Square,
   Copy,
 } from 'lucide-react'
-import { nowPlayingApi, NowPlayingChannel, InfoScreenTemplate } from '../services/nowPlayingApi'
-import api from '../../../utils/api'
+import { nowPlayingApi, NowPlayingChannel, InfoScreenTemplate, BouquetOption, ServerOption } from '../services/nowPlayingApi'
 
 // ── Cinema Decorations (SVG) ─────────────────────────────────────────────────
 
@@ -83,21 +82,15 @@ function TemplateManagerModal({
   const [form, setForm] = useState<Partial<InfoScreenTemplate>>({})
   const [uploading, setUploading] = useState(false)
 
-  const { data: bouquets } = useQuery({
-    queryKey: ['bouquets-list'],
-    queryFn: async () => {
-      const r = await api.get<{ id: number; name: string }[]>('/bouquets')
-      return r.data
-    },
+  const { data: bouquets } = useQuery<BouquetOption[]>({
+    queryKey: ['bouquets-options'],
+    queryFn: nowPlayingApi.listBouquets,
     enabled: open,
   })
 
-  const { data: servers } = useQuery({
-    queryKey: ['servers-list'],
-    queryFn: async () => {
-      const r = await api.get<{ id: number; name: string }[]>('/servers')
-      return r.data
-    },
+  const { data: servers } = useQuery<ServerOption[]>({
+    queryKey: ['servers-options'],
+    queryFn: nowPlayingApi.listServers,
     enabled: open,
   })
 
@@ -260,35 +253,6 @@ function TemplateManagerModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">Bouquet</label>
-              <select
-                value={form.bouquet_id ?? ''}
-                onChange={(e) => setForm((p) => ({ ...p, bouquet_id: e.target.value ? Number(e.target.value) : null }))}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
-              >
-                <option value="">— Seçiniz —</option>
-                {bouquets?.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">Sunucu</label>
-              <select
-                value={form.server_id ?? ''}
-                onChange={(e) => setForm((p) => ({ ...p, server_id: e.target.value ? Number(e.target.value) : null }))}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
-              >
-                <option value="">— Seçiniz —</option>
-                {servers?.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Arka Plan Görseli</label>
             <div className="flex items-center gap-3">
@@ -312,6 +276,35 @@ function TemplateManagerModal({
               className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-amber-500"
             />
             <label htmlFor="is_default" className="text-sm text-slate-300">Varsayılan şablon yap</label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Bouquet (Otomatik Ekle)</label>
+              <select
+                value={form.bouquet_id ?? ''}
+                onChange={(e) => setForm((p) => ({ ...p, bouquet_id: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
+              >
+                <option value="">— Seçme —</option>
+                {(bouquets || []).map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Sunucu (FFmpeg)</label>
+              <select
+                value={form.server_id ?? ''}
+                onChange={(e) => setForm((p) => ({ ...p, server_id: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
+              >
+                <option value="">— Ana Sunucu —</option>
+                {(servers || []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

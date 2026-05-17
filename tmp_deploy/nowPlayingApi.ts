@@ -33,6 +33,18 @@ export interface InfoScreenStreamStatus {
   pid: number | null
   stream_url: string | null
   started_at: string | null
+  remote?: boolean
+}
+
+export interface BouquetOption {
+  id: number
+  name: string
+}
+
+export interface ServerOption {
+  id: number
+  name: string
+  ip_address: string
 }
 
 export const nowPlayingApi = {
@@ -77,5 +89,13 @@ export const nowPlayingApi = {
   async getStreamStatus(): Promise<InfoScreenStreamStatus> {
     const r = await api.get<InfoScreenStreamStatus>('/playlists/info-screen/stream/status')
     return r.data
+  },
+  async listBouquets(): Promise<BouquetOption[]> {
+    const r = await api.get<{ id: number; name: string }[]>('/bouquets')
+    return r.data.map((b) => ({ id: b.id, name: b.name }))
+  },
+  async listServers(): Promise<ServerOption[]> {
+    const r = await api.get<{ id: number; name: string; ip_address: string }[]>('/servers')
+    return r.data.map((s) => ({ id: s.id, name: s.name, ip_address: s.ip_address }))
   },
 }

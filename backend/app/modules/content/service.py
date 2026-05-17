@@ -383,6 +383,8 @@ def _get_item_metadata(db: Session, item_type: str, item_id: int) -> tuple[str |
         elif item_type == "music_playlist":
             obj = db.query(MusicPlaylist).filter(MusicPlaylist.id == item_id).first()
             return (obj.name, None) if obj else (None, None)
+        elif item_type == "info_screen":
+            return ("Info Ekranı", None)
     except Exception:
         pass
     return (None, None)

@@ -326,6 +326,8 @@ def _get_item_stream_url(db: Session, item_type: str, item_id: int, server_host:
             if obj and obj.stream_url:
                 return obj.stream_url
             return None
+        elif item_type == "info_screen":
+            return f"http://{server_host}/hls/info_screen/stream.m3u8"
     except Exception:
         pass
     # Default: Xtream-Codes proxy URL
