@@ -124,12 +124,14 @@ class MovieContent(Base):
     file_path = Column(String(1000), nullable=True)
     file_size_bytes = Column(BigInteger, nullable=True)
     source_url = Column(Text, nullable=True)
+    server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True, index=True)
     is_public = Column(Boolean, nullable=False, default=True, index=True)
     download_queue_id = Column(Integer, ForeignKey("download_queue.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     category = relationship("MovieCategory")
+    server = relationship("Server")
 
 
 # ── Series Content (Xtream Codes hierarchy) ──────────────────────────────────
@@ -149,10 +151,12 @@ class SeriesContent(Base):
     broadcast_day = Column(String(20), nullable=True, index=True)
     broadcast_channel = Column(String(100), nullable=True)
     channel_logo_url = Column(String(1000), nullable=True)
+    server_id = Column(Integer, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     category = relationship("SeriesCategory")
+    server = relationship("Server")
     seasons = relationship("SeriesSeason", back_populates="series", cascade="all, delete-orphan", order_by="SeriesSeason.season_number.asc()")
 
 
