@@ -29,7 +29,7 @@ HLS_DIR = Path("/var/www/vod-manager/shared/hls/info_screen")
 IMAGE_PATH = "/tmp/info_screen.png"
 STATE_FILE = "/tmp/info_screen_state.json"
 STREAM_URL = "http://62.210.92.252/hls/info_screen/stream.m3u8"
-REFRESH_INTERVAL = 30  # saniye
+DEFAULT_REFRESH_INTERVAL = 30  # saniye (template yoksa fallback)
 
 # Thread referansı
 _refresh_thread: threading.Thread | None = None
@@ -129,15 +129,53 @@ def _start_ffmpeg() -> int:
 # ── Refresh thread ─────────────────────────────────────────────────────────────
 
 def _refresh_loop(db_factory, initial_pid: int) -> None:
-    """REFRESH_INTERVAL saniyede bir görsel yeniler.
+    """Şablonun refresh_interval değeri kadar saniyede bir görsel yeniler.
 
     image2 demuxer kullanıldığı için FFmpeg yeni görseli otomatik okur;
     restart gerekmez.
     """
+    from app.modules.playlist.models import InfoScreenTemplate
+
+    interval = DEFAULT_REFRESH_INTERVAL
+    # İlk interval'ı veritabanından çek
+    try:
+        db: Session = db_factory()
+        try:
+            tmpl = (
+                db.query(InfoScreenTemplate)
+                .filter(InfoScreenTemplate.is_default == True)
+                .first()
+            )
+            if tmpl is None:
+                tmpl = db.query(InfoScreenTemplate).order_by(InfoScreenTemplate.id.asc()).first()
+            if tmpl and tmpl.refresh_interval:
+                interval = max(10, min(300, int(tmpl.refresh_interval)))
+        finally:
+            db.close()
+    except Exception:
+        pass
+
     while not _stop_event.is_set():
-        _stop_event.wait(REFRESH_INTERVAL)
+        _stop_event.wait(interval)
         if _stop_event.is_set():
             break
+        # Her döngüde interval'ı güncelle (kullanıcı değiştirmiş olabilir)
+        try:
+            db: Session = db_factory()
+            try:
+                tmpl = (
+                    db.query(InfoScreenTemplate)
+                    .filter(InfoScreenTemplate.is_default == True)
+                    .first()
+                )
+                if tmpl is None:
+                    tmpl = db.query(InfoScreenTemplate).order_by(InfoScreenTemplate.id.asc()).first()
+                if tmpl and tmpl.refresh_interval:
+                    interval = max(10, min(300, int(tmpl.refresh_interval)))
+            finally:
+                db.close()
+        except Exception:
+            pass
         # Sadece yeni görsel oluştur — FFmpeg image2 demuxer ile otomatik okur
         try:
             db: Session = db_factory()

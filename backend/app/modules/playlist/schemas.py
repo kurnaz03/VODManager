@@ -85,6 +85,7 @@ class InfoScreenTemplateBase(BaseModel):
     bg_overlay_opacity: int = 70
     font_family: str = "serif"
     layout: str = "cinema"
+    refresh_interval: int = 30
 
 
 class InfoScreenTemplateCreate(InfoScreenTemplateBase):

@@ -1,14 +1,13 @@
 """Info Screen Generator — Pillow ile 1920x1080 görsel oluşturur.
 
-Kullanım:
-    from app.modules.playlist.info_screen_generator import generate_info_screen_image
-    path = generate_info_screen_image(db)
+Düzen: Sol panel (60%) koyu arka plan + kanal listesi
+       Sağ panel (40%) sinema arka plan görseli
+       7 kanal, cover tam boyut, yanında kanal adı + film adı
 """
 from __future__ import annotations
 
 import io
 import os
-import textwrap
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -16,9 +15,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 OUTPUT_PATH = "/tmp/info_screen.png"
-FONT_DIR = Path("/usr/share/fonts")
 
-# Fallback: DejaVu Sans (hemen hemen her Linux'ta mevcut)
 _FONT_FALLBACKS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -28,25 +25,20 @@ _FONT_FALLBACKS = [
     "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
 ]
 
+POSTER_W = 120   # Cover genişliği
+POSTER_H = 180   # Cover yüksekliği (3:2 aspect ratio)
+MAX_CHANNELS = 7 # Sadece 7 kanal
+
 
 def _find_font(size: int):
-    """PIL ImageFont yükler — kurulu TrueType font bulamazsa varsayılan kullanır."""
-    try:
-        from PIL import ImageFont
-        for path in _FONT_FALLBACKS:
-            if os.path.exists(path):
-                return ImageFont.truetype(path, size)
-        return ImageFont.load_default()
-    except Exception:
-        try:
-            from PIL import ImageFont
-            return ImageFont.load_default()
-        except Exception:
-            return None
+    from PIL import ImageFont
+    for path in _FONT_FALLBACKS:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
 
 
 def _download_image(url: str, timeout: int = 5) -> bytes | None:
-    """URL'den görsel indir. Hata durumunda None döner."""
     if not url:
         return None
     try:
@@ -58,11 +50,8 @@ def _download_image(url: str, timeout: int = 5) -> bytes | None:
 
 
 def _load_bg_image(bg_url: str | None, width: int, height: int):
-    """Arka plan görselini yükle veya düz renkli bir arka plan döndür."""
     from PIL import Image
-
     if bg_url:
-        # Sunucu içi URL'yi mutlak yola çevir
         if bg_url.startswith("/uploads/"):
             local_path = f"/var/www/vod-manager/shared{bg_url}"
             if os.path.exists(local_path):
@@ -71,7 +60,6 @@ def _load_bg_image(bg_url: str | None, width: int, height: int):
                     return img.resize((width, height), Image.LANCZOS)
                 except Exception:
                     pass
-        # HTTP URL: indir
         data = _download_image(bg_url)
         if data:
             try:
@@ -79,172 +67,157 @@ def _load_bg_image(bg_url: str | None, width: int, height: int):
                 return img.resize((width, height), Image.LANCZOS)
             except Exception:
                 pass
-
-    # Varsayılan: sinema teması koyu arka plan (derin gece mavisi)
-    bg = Image.new("RGBA", (width, height), (10, 10, 30, 255))
-    return bg
+    return Image.new("RGBA", (width, height), (10, 10, 30, 255))
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     hex_color = hex_color.lstrip("#")
     try:
-        r = int(hex_color[0:2], 16)
-        g = int(hex_color[2:4], 16)
-        b = int(hex_color[4:6], 16)
-        return (r, g, b)
+        return (int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16))
     except Exception:
-        return (212, 168, 67)  # Altın rengi
+        return (212, 168, 67)
+
+
+def _load_poster(url: str | None):
+    from PIL import Image
+    if not url:
+        return None
+    data = _download_image(url, timeout=4)
+    if not data:
+        return None
+    try:
+        img = Image.open(io.BytesIO(data)).convert("RGBA")
+        return img.resize((POSTER_W, POSTER_H), Image.LANCZOS)
+    except Exception:
+        return None
 
 
 def generate_info_screen_image(db: Session, output_path: str = OUTPUT_PATH) -> str:
-    """Veritabanından now-playing bilgilerini alır ve görsel oluşturur.
-
-    Returns: output_path (başarılı) veya exception.
-    """
-    from PIL import Image, ImageDraw, ImageFilter
-
+    from PIL import Image, ImageDraw
     from app.modules.playlist.broadcast import get_all_now_playing
     from app.modules.playlist.models import InfoScreenTemplate
 
-    WIDTH, HEIGHT = 1920, 1080
+    W, H = 1920, 1080
+    LEFT_W = 1200  # Sol panel
+    MARGIN = 60    # Kenar boşluğu
 
-    # --- Şablon ---
-    tmpl: InfoScreenTemplate | None = (
-        db.query(InfoScreenTemplate)
-        .filter(InfoScreenTemplate.is_default == True)
-        .first()
-    )
+    # Şablon
+    tmpl = db.query(InfoScreenTemplate).filter(InfoScreenTemplate.is_default == True).first()
     if tmpl is None:
         tmpl = db.query(InfoScreenTemplate).order_by(InfoScreenTemplate.id.asc()).first()
 
-    primary_color_hex = (tmpl.primary_color if tmpl else "#D4A843")
-    primary_rgb = _hex_to_rgb(primary_color_hex)
-    overlay_opacity = int(tmpl.bg_overlay_opacity if tmpl else 70) * 255 // 100
-    title_text = (tmpl.title_text if tmpl else "ŞU ANDA YAYINDA OLANLAR")
-    subtitle_text = (tmpl.subtitle_text if tmpl else "SİNEMA KANALLARI")
-    bg_url: str | None = (tmpl.bg_image_url if tmpl else None)
+    primary_rgb = _hex_to_rgb(tmpl.primary_color if tmpl else "#D4A843")
+    title_text = tmpl.title_text if tmpl else "ŞU ANDA YAYINDA OLANLAR"
+    subtitle_text = tmpl.subtitle_text if tmpl else "SİNEMA KANALLARI"
+    bg_url = tmpl.bg_image_url if tmpl else None
 
-    # --- Arka plan ---
-    bg = _load_bg_image(bg_url, WIDTH, HEIGHT)
+    # Arka plan
+    bg = _load_bg_image(bg_url, W, H)
 
-    # Karanlık overlay
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, overlay_opacity))
-    bg = Image.alpha_composite(bg, overlay)
+    # Sol panel: koyu yarı saydam
+    left_panel = Image.new("RGBA", (LEFT_W, H), (5, 5, 15, 240))
+    bg.paste(left_panel, (0, 0), left_panel)
 
     draw = ImageDraw.Draw(bg)
 
-    # --- Fontlar ---
-    font_title = _find_font(72)
-    font_subtitle = _find_font(36)
-    font_header = _find_font(30)
-    font_channel = _find_font(34)
-    font_movie = _find_font(30)
-    font_number = _find_font(38)
+    # Fontlar
+    font_title = _find_font(64)
+    font_subtitle = _find_font(32)
+    font_channel = _find_font(30)
+    font_movie = _find_font(26)
+    font_number = _find_font(32)
 
-    # --- Sol/sağ altın çizgi (dekoratif) ---
-    line_y = 160
-    draw.rectangle([(80, line_y), (WIDTH - 80, line_y + 4)], fill=(*primary_rgb, 200))
-
-    # --- Başlık ---
-    title_y = 60
+    # Başlık
+    title_y = 50
     if font_title:
-        # Metin ortala (yaklaşık)
         try:
             bbox = draw.textbbox((0, 0), title_text, font=font_title)
-            text_w = bbox[2] - bbox[0]
+            tw = bbox[2] - bbox[0]
         except Exception:
-            text_w = len(title_text) * 40
-        draw.text(
-            ((WIDTH - text_w) // 2, title_y),
-            title_text,
-            fill=(*primary_rgb, 255),
-            font=font_title,
-        )
+            tw = len(title_text) * 36
+        draw.text(((LEFT_W - tw) // 2, title_y), title_text, fill=(*primary_rgb, 255), font=font_title)
 
-    # --- Alt başlık ---
+    # Alt başlık
     if subtitle_text and font_subtitle:
         try:
             bbox = draw.textbbox((0, 0), subtitle_text, font=font_subtitle)
-            sub_w = bbox[2] - bbox[0]
+            sw = bbox[2] - bbox[0]
         except Exception:
-            sub_w = len(subtitle_text) * 20
-        draw.text(
-            ((WIDTH - sub_w) // 2, title_y + 82),
-            subtitle_text,
-            fill=(200, 200, 200, 200),
-            font=font_subtitle,
-        )
+            sw = len(subtitle_text) * 18
+        draw.text(((LEFT_W - sw) // 2, title_y + 75), subtitle_text, fill=(180, 180, 180, 200), font=font_subtitle)
 
-    # --- Sütun başlıkları ---
-    col_y = 185
-    headers = ["#", "KANAL ADI", "ŞU AN YAYINDA"]
-    col_x = [80, 160, 680]
-    for i, (hdr, x) in enumerate(zip(headers, col_x)):
-        if font_header:
-            draw.text((x, col_y), hdr, fill=(180, 180, 180, 220), font=font_header)
+    # Altın çizgi
+    draw.rectangle([(MARGIN, 155), (LEFT_W - MARGIN, 158)], fill=(*primary_rgb, 200))
 
-    draw.rectangle([(80, col_y + 40), (WIDTH - 80, col_y + 43)], fill=(*primary_rgb, 120))
+    # Kanal listesi
+    channels = get_all_now_playing(db)
+    channels = channels[:MAX_CHANNELS]  # Sadece 7 kanal
 
-    # --- Kanal listesi ---
-    channels: list[dict[str, Any]] = get_all_now_playing(db)
+    # Her kanal için satır yüksekliği = cover yüksekliği + boşluk
+    row_h = POSTER_H + 20
+    start_y = 175
 
-    row_height = 62
-    max_rows = min(len(channels), 13)  # 1080px yüksekliğe sığacak kadar
-    start_y = col_y + 55
+    for idx, ch in enumerate(channels):
+        row_y = start_y + idx * row_h
 
-    for idx, ch in enumerate(channels[:max_rows]):
-        row_y = start_y + idx * row_height
-        is_even = idx % 2 == 0
+        # Satır arka planı (koyu)
+        alpha = 40 if idx % 2 == 0 else 20
+        draw.rectangle([(MARGIN, row_y), (LEFT_W - MARGIN, row_y + POSTER_H)], fill=(0, 0, 0, alpha))
 
-        # Satır arka planı
-        row_bg_alpha = 40 if is_even else 20
-        draw.rectangle(
-            [(80, row_y - 8), (WIDTH - 80, row_y + row_height - 12)],
-            fill=(255, 255, 255, row_bg_alpha),
-        )
-
-        # Kanal numarası
-        num_str = str(ch["channel_number"])
+        # Kanal numarası (solda, dikey ortada)
+        num_x = MARGIN + 15
+        num_y = row_y + POSTER_H // 2 - 16
         if font_number:
-            draw.text((col_x[0] + 10, row_y), num_str, fill=(*primary_rgb, 255), font=font_number)
+            draw.text((num_x, num_y), str(ch["channel_number"]), fill=(*primary_rgb, 255), font=font_number)
 
-        # Kanal adı (max 20 karakter)
-        ch_name = (ch.get("playlist_name") or "")[:28]
+        # Cover (poster) — tam boyut
+        poster_x = MARGIN + 70
+        poster = _load_poster(ch.get("current_poster"))
+        if poster:
+            bg.paste(poster, (poster_x, row_y), poster)
+        else:
+            ph = Image.new("RGBA", (POSTER_W, POSTER_H), (50, 50, 60, 255))
+            bg.paste(ph, (poster_x, row_y), ph)
+
+        # Metin alanı (cover'ın sağında)
+        text_x = poster_x + POSTER_W + 25
+        text_y = row_y + POSTER_H // 2  # Dikey orta
+
+        # Kanal adı (üstte)
+        ch_name = (ch.get("playlist_name") or "")[:30]
         if font_channel:
-            draw.text((col_x[1], row_y), ch_name, fill=(240, 240, 240, 255), font=font_channel)
+            draw.text((text_x, text_y - 35), ch_name, fill=(255, 255, 255, 255), font=font_channel)
 
-        # Şu an yayında
+        # Film adı (altta, kanal adının altında)
         now_title = ch.get("current_title")
         if now_title and ch.get("status") == "playing":
-            # 45 karakter ile sınırla
-            truncated = now_title[:45] + ("..." if len(now_title) > 45 else "")
+            t = now_title[:42] + ("..." if len(now_title) > 42 else "")
             if font_movie:
-                draw.text((col_x[2], row_y), truncated, fill=(220, 220, 160, 255), font=font_movie)
+                draw.text((text_x, text_y + 5), t, fill=(220, 200, 100, 255), font=font_movie)
         elif ch.get("status") == "playing":
             if font_movie:
-                draw.text((col_x[2], row_y), "Yayında", fill=(100, 220, 100, 200), font=font_movie)
+                draw.text((text_x, text_y + 5), "Yayında", fill=(100, 220, 100, 200), font=font_movie)
         else:
             if font_movie:
-                draw.text((col_x[2], row_y), "—", fill=(120, 120, 120, 180), font=font_movie)
+                draw.text((text_x, text_y + 5), "—", fill=(120, 120, 120, 180), font=font_movie)
 
-    # --- Alt çizgi ---
-    bottom_y = HEIGHT - 60
-    draw.rectangle([(80, bottom_y), (WIDTH - 80, bottom_y + 3)], fill=(*primary_rgb, 150))
+    # Alt çizgi
+    by = H - 55
+    draw.rectangle([(MARGIN, by), (LEFT_W - MARGIN, by + 2)], fill=(*primary_rgb, 150))
 
-    # --- Alt bilgi ---
+    # Alt bilgi
     from datetime import datetime, timezone
-    now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y  %H:%M UTC")
+    now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
     if font_subtitle:
-        draw.text((80, bottom_y + 12), "VOD Manager", fill=(*primary_rgb, 200), font=font_subtitle)
+        draw.text((MARGIN, by + 12), "VOD Manager", fill=(*primary_rgb, 180), font=font_subtitle)
         try:
             bbox = draw.textbbox((0, 0), now_str, font=font_subtitle)
-            time_w = bbox[2] - bbox[0]
+            tw = bbox[2] - bbox[0]
         except Exception:
-            time_w = len(now_str) * 18
-        draw.text((WIDTH - 80 - time_w, bottom_y + 12), now_str, fill=(180, 180, 180, 200), font=font_subtitle)
+            tw = len(now_str) * 18
+        draw.text((LEFT_W - MARGIN - tw, by + 12), now_str, fill=(160, 160, 160, 180), font=font_subtitle)
 
     # Kaydet
-    os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else "/tmp", exist_ok=True)
-    bg_rgb = bg.convert("RGB")
-    bg_rgb.save(output_path, "PNG", optimize=False)
+    os.makedirs(os.path.dirname(output_path) or "/tmp", exist_ok=True)
+    bg.convert("RGB").save(output_path, "PNG", optimize=False)
     return output_path

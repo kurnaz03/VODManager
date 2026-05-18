@@ -65,5 +65,6 @@ class InfoScreenTemplate(Base):
     bg_overlay_opacity = Column(Integer, nullable=False, default=70)
     font_family = Column(String(50), nullable=False, default="serif")
     layout = Column(String(30), nullable=False, default="cinema")
+    refresh_interval = Column(Integer, nullable=False, default=30)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

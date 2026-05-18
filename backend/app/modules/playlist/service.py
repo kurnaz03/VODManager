@@ -24,6 +24,7 @@ def ensure_default_info_screen_template(db: Session) -> None:
             bg_overlay_opacity=70,
             font_family="serif",
             layout="cinema",
+            refresh_interval=30,
         ))
         db.commit()
 

@@ -22,6 +22,7 @@ export interface InfoScreenTemplate {
   bg_overlay_opacity: number
   font_family: string
   layout: string
+  refresh_interval: number
   bouquet_id: number | null
   server_id: number | null
   created_at: string

@@ -767,7 +767,7 @@ function PlaylistListView({
                           {!pl.description && si?.profile_name && (
                             <div className="text-xs text-slate-400 mt-0.5">{si.profile_name}</div>
                           )}
-                          {pl.server_type === 'loadbalancer' && (
+                          {'server_type' in pl && pl.server_type === 'loadbalancer' && (
                             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-600 uppercase mt-1 inline-block" title="Cache Disabled - Always Fresh Stream">
                               No Cache
                             </span>
@@ -1028,6 +1028,31 @@ function PlaylistDetailView({
 
   const [activeDragId, setActiveDragId] = useState<number | null>(null)
 
+  // Kanal adı düzenleme state'leri
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editNameValue, setEditNameValue] = useState('')
+
+  const renameMutation = useMutation({
+    mutationFn: async (newName: string) => {
+      await playlistApi.update(currentPlaylist.id, { name: newName })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['playlists'] })
+      setIsEditingName(false)
+      onToast('Kanal adı güncellendi', 'ok')
+    },
+    onError: (e: any) => onToast(e?.response?.data?.detail ?? 'Güncellenemedi', 'err'),
+  })
+
+  const handleRename = () => {
+    const trimmed = editNameValue.trim()
+    if (!trimmed || trimmed === currentPlaylist.name) {
+      setIsEditingName(false)
+      return
+    }
+    renameMutation.mutate(trimmed)
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -1105,7 +1130,48 @@ function PlaylistDetailView({
           Geri
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-3">
-          <h1 className="text-xl font-bold text-slate-800 truncate">{currentPlaylist.name}</h1>
+          {isEditingName ? (
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                type="text"
+                value={editNameValue}
+                onChange={(e) => setEditNameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRename()
+                  if (e.key === 'Escape') setIsEditingName(false)
+                }}
+                autoFocus
+                className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-1.5 text-lg font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={handleRename}
+                disabled={renameMutation.isPending || !editNameValue.trim()}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {renameMutation.isPending ? '...' : 'Kaydet'}
+              </button>
+              <button
+                onClick={() => setIsEditingName(false)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                İptal
+              </button>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-800 truncate">{currentPlaylist.name}</h1>
+              <button
+                onClick={() => {
+                  setEditNameValue(currentPlaylist.name)
+                  setIsEditingName(true)
+                }}
+                className="rounded-lg p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                title="Kanal adını değiştir"
+              >
+                <Pencil size={16} />
+              </button>
+            </>
+          )}
           {isPlaying && (
             <span className="flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white animate-pulse shrink-0">
               <Radio size={10} />

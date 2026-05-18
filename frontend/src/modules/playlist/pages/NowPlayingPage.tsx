@@ -135,6 +135,7 @@ function TemplateManagerModal({
         layout: 'cinema',
         bouquet_id: null,
         server_id: null,
+        refresh_interval: 30,
       })
     }
   }, [editing, open])
@@ -235,18 +236,6 @@ function TemplateManagerModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">Font</label>
-              <select
-                value={form.font_family || 'serif'}
-                onChange={(e) => setForm((p) => ({ ...p, font_family: e.target.value }))}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
-              >
-                <option value="serif">Serif</option>
-                <option value="sans-serif">Sans-Serif</option>
-                <option value="monospace">Monospace</option>
-              </select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-slate-400">Layout</label>
               <select
                 value={form.layout || 'cinema'}
@@ -257,6 +246,17 @@ function TemplateManagerModal({
                 <option value="minimal">Minimal</option>
                 <option value="dark">Dark</option>
               </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Yenileme Süresi (sn)</label>
+              <input
+                type="number"
+                min={10}
+                max={300}
+                value={form.refresh_interval ?? 30}
+                onChange={(e) => setForm((p) => ({ ...p, refresh_interval: Math.min(300, Math.max(10, Number(e.target.value))) }))}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500"
+              />
             </div>
           </div>
 
@@ -533,7 +533,7 @@ export default function NowPlayingPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">
               <RefreshCw size={12} className="animate-spin" style={{ animationDuration: '3s' }} />
-              30sn'de yenilenir
+              {template?.refresh_interval ?? 30}sn'de yenilenir
             </div>
             <button
               onClick={() => setShowManager(true)}
