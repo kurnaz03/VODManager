@@ -78,22 +78,22 @@ def _build_ffmpeg_args() -> list[str]:
     stream_dir = str(HLS_DIR)
     return [
         "ffmpeg", "-y",
-        "-f", "image2",           # image2 demuxer: her frame'de dosyayı yeniden okur
-        "-stream_loop", "-1",     # sonsuz loop
-        "-framerate", "1/5",      # 5 saniyede 1 frame (0.2 fps) — CPU dostu
+        "-f", "image2",
+        "-stream_loop", "-1",
+        "-framerate", "1",         # 1 fps — player buffer dolu kalır, kopma olmaz
         "-i", IMAGE_PATH,
         "-c:v", "libx264",
         "-preset", "ultrafast",
         "-tune", "stillimage",
         "-crf", "28",
         "-pix_fmt", "yuv420p",
-        "-r", "1/5",              # output 0.2 fps
-        "-g", "1",
+        "-r", "1",                 # output 1 fps
+        "-g", "25",                # GOP 25 (her 25 frame I-frame)
         "-threads", "1",
         "-an",
         "-f", "hls",
-        "-hls_time", "10",        # 10 sn segment (daha az segment, daha az I/O)
-        "-hls_list_size", "3",    # sadece son 3 segment
+        "-hls_time", "4",          # 4 sn segment (4 frame)
+        "-hls_list_size", "10",    # 10 segment = 40 sn buffer
         "-hls_flags", "delete_segments+append_list+omit_endlist",
         "-hls_segment_filename", f"{stream_dir}/seg_%05d.ts",
         f"{stream_dir}/stream.m3u8",

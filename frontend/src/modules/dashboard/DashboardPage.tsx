@@ -54,7 +54,7 @@ function fmtGB(mb: number): string {
 // ── Circular Progress (SVG) ───────────────────────────────────────────────────
 
 function CircularProgress({ value, size = 76 }: { value: number; size?: number }) {
-  const strokeW = 6
+  const strokeW = Math.max(4, size * 0.08)
   const r = (size - strokeW * 2) / 2
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - Math.min(Math.max(value, 0), 100) / 100)
@@ -65,6 +65,7 @@ function CircularProgress({ value, size = 76 }: { value: number; size?: number }
     <svg
       width={size}
       height={size}
+      viewBox={`0 0 ${size} ${size}`}
       style={{ transform: 'rotate(-90deg)' }}
       className="flex-shrink-0"
     >
@@ -120,18 +121,20 @@ function MetricCard({ gradient, icon, title, mainValue, subValue, percent, badge
 
       {/* middle row */}
       <div className="mt-4 flex items-end justify-between gap-3">
-        <div>
-          <div className="text-4xl font-bold leading-none tracking-tight">{mainValue}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-3xl font-bold leading-none tracking-tight sm:text-4xl">{mainValue}</div>
           {subValue && (
-            <div className="mt-1.5 text-sm text-white/75">{subValue}</div>
+            <div className="mt-1.5 text-xs text-white/75 sm:text-sm">{subValue}</div>
           )}
         </div>
-        <div className="relative flex flex-col items-center justify-center">
-          <CircularProgress value={percent} size={76} />
-          <span
-            className="absolute text-xs font-semibold"
-            style={{ transform: 'none' }}
-          >
+        <div className="relative flex flex-col items-center justify-center flex-shrink-0">
+          <div className="hidden sm:block">
+            <CircularProgress value={percent} size={76} />
+          </div>
+          <div className="sm:hidden">
+            <CircularProgress value={percent} size={56} />
+          </div>
+          <span className="absolute text-[10px] font-semibold sm:text-xs">
             {Math.round(percent)}%
           </span>
         </div>
