@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Film, Pencil, Plus, Trash2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { contentApi, Category, MovieContent, MovieContentUpdate, moviesApi } from '../services/contentApi'
+import { serversApi, Server as ServerModel } from '../../servers/services/serversApi'
 
 function formatSize(bytes: number | null) {
   if (!bytes) return '-'
@@ -24,6 +25,11 @@ export default function MoviesPage() {
   const categoriesQuery = useQuery({
     queryKey: ['categories', 'movies'],
     queryFn: () => contentApi.listCategories('movies'),
+  })
+
+  const serversQuery = useQuery({
+    queryKey: ['servers'],
+    queryFn: () => serversApi.list(),
   })
 
   const moviesQuery = useQuery({
@@ -49,6 +55,7 @@ export default function MoviesPage() {
 
   const categories: Category[] = categoriesQuery.data ?? []
   const allMovies: MovieContent[] = moviesQuery.data ?? []
+  const servers: ServerModel[] = serversQuery.data ?? []
 
   // Pagination
   const totalItems = allMovies.length
@@ -243,6 +250,7 @@ export default function MoviesPage() {
             <EditMovieForm
               item={editItem}
               categories={categories}
+              servers={servers}
               onSubmit={(payload) => updateMutation.mutate({ id: editItem.id, payload })}
               isPending={updateMutation.isPending}
             />
@@ -279,11 +287,13 @@ export default function MoviesPage() {
 function EditMovieForm({
   item,
   categories,
+  servers,
   onSubmit,
   isPending,
 }: {
   item: MovieContent
   categories: Category[]
+  servers: ServerModel[]
   onSubmit: (payload: MovieContentUpdate) => void
   isPending: boolean
 }) {
@@ -291,6 +301,7 @@ function EditMovieForm({
   const [description, setDescription] = useState(item.description ?? '')
   const [categoryId, setCategoryId] = useState<number | null>(item.category_id)
   const [posterUrl, setPosterUrl] = useState(item.poster_url ?? '')
+  const [serverId, setServerId] = useState<number | null>(item.server_id)
 
   return (
     <form
@@ -302,6 +313,7 @@ function EditMovieForm({
           description: description || null,
           category_id: categoryId,
           poster_url: posterUrl || null,
+          server_id: serverId,
         })
       }}
     >
@@ -323,6 +335,19 @@ function EditMovieForm({
           <option value="">Kategori yok</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="panel-label">Sunucu</label>
+        <select
+          className="panel-select w-full"
+          value={serverId ?? ''}
+          onChange={(e) => setServerId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">Main Server (varsayilan)</option>
+          {servers.map((s) => (
+            <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>
           ))}
         </select>
       </div>

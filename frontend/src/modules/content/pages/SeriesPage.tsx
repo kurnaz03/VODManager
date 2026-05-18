@@ -63,6 +63,7 @@ export default function SeriesPage() {
   const [editBackdropUrl, setEditBackdropUrl] = useState('')
   const [editReleaseYear, setEditReleaseYear] = useState('')
   const [editRating, setEditRating] = useState('')
+  const [editServerId, setEditServerId] = useState<number | null>(null)
   const [tmdbImportResult, setTmdbImportResult] = useState<string | null>(null)
   const [showTmdbImportConfirm, setShowTmdbImportConfirm] = useState(false)
   const [pendingTmdbSeasons, setPendingTmdbSeasons] = useState<TmdbSeason[] | null>(null)
@@ -71,6 +72,11 @@ export default function SeriesPage() {
   const seriesQuery = useQuery({
     queryKey: ['series'],
     queryFn: () => seriesApi.list(),
+  })
+
+  const serversQuery = useQuery({
+    queryKey: ['servers'],
+    queryFn: () => serversApi.list(),
   })
 
   const seasonsQuery = useQuery({
@@ -213,6 +219,7 @@ export default function SeriesPage() {
   const seriesList: SeriesContent[] = seriesQuery.data ?? []
   const seasons: Season[] = seasonsQuery.data ?? []
   const episodes: Episode[] = episodesQuery.data ?? []
+  const servers: ServerModel[] = serversQuery.data ?? []
 
   // Filter derived values
   const uniqueChannels = Array.from(
@@ -449,6 +456,7 @@ export default function SeriesPage() {
                             setEditBackdropUrl(s.backdrop_url ?? '')
                             setEditReleaseYear(s.release_year != null ? String(s.release_year) : '')
                             setEditRating(s.rating != null ? String(s.rating) : '')
+                            setEditServerId(s.server_id)
                           }}
                         >
                           <Edit2 size={13} /> Duzenle
@@ -587,6 +595,7 @@ export default function SeriesPage() {
             <AddSeriesForm
               onSubmit={(p) => createSeriesMutation.mutate(p)}
               isPending={createSeriesMutation.isPending}
+              servers={servers}
             />
           </div>
         </div>
@@ -696,6 +705,7 @@ export default function SeriesPage() {
                     backdrop_url: editBackdropUrl || null,
                     release_year: editReleaseYear ? Number(editReleaseYear) : null,
                     rating: editRating ? parseFloat(editRating) : null,
+                    server_id: editServerId,
                   },
                 })
               }}
@@ -720,6 +730,19 @@ export default function SeriesPage() {
                   <label className="panel-label">Kanal</label>
                   <input className="panel-input w-full" value={editBroadcastChannel} onChange={(e) => setEditBroadcastChannel(e.target.value)} placeholder="TRT1, ATV..." />
                 </div>
+              </div>
+              <div>
+                <label className="panel-label">Sunucu</label>
+                <select
+                  className="panel-input w-full"
+                  value={editServerId ?? ''}
+                  onChange={(e) => setEditServerId(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Main Server (varsayilan)</option>
+                  {servers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="panel-label">Kanal Logo URL</label>
@@ -793,9 +816,11 @@ const BROADCAST_DAYS = ['Pazartesi', 'Sali', 'Carsamba', 'Persembe', 'Cuma', 'Cu
 function AddSeriesForm({
   onSubmit,
   isPending,
+  servers,
 }: {
   onSubmit: (p: SeriesContentCreate) => void
   isPending: boolean
+  servers: ServerModel[]
 }) {
   const [title, setTitle] = useState('')
   const [tmdbQuery, setTmdbQuery] = useState('')
@@ -803,6 +828,7 @@ function AddSeriesForm({
   const [broadcastDay, setBroadcastDay] = useState<string>('')
   const [broadcastChannel, setBroadcastChannel] = useState('')
   const [channelLogoUrl, setChannelLogoUrl] = useState('')
+  const [serverId, setServerId] = useState<number | null>(null)
 
   const tmdbSearch = useQuery({
     queryKey: ['tmdb-tv-search', tmdbQuery],
@@ -827,6 +853,7 @@ function AddSeriesForm({
           broadcast_day: broadcastDay || null,
           broadcast_channel: broadcastChannel || null,
           channel_logo_url: channelLogoUrl || null,
+          server_id: serverId,
         })
       }}
     >
@@ -883,6 +910,19 @@ function AddSeriesForm({
           <label className="panel-label">Kanal</label>
           <input className="panel-input" value={broadcastChannel} onChange={(e) => setBroadcastChannel(e.target.value)} placeholder="TRT1, ATV, Star TV..." />
         </div>
+      </div>
+      <div>
+        <label className="panel-label">Sunucu</label>
+        <select
+          className="panel-input w-full"
+          value={serverId ?? ''}
+          onChange={(e) => setServerId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">Main Server (varsayilan)</option>
+          {servers.map((s) => (
+            <option key={s.id} value={s.id}>{s.name} ({s.ip_address})</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="panel-label">Kanal Logosu URL (opsiyonel)</label>

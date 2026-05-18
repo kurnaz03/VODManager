@@ -32,6 +32,7 @@ export interface DownloadItem {
   series_id: number | null
   season_id: number | null
   episode_number: number | null
+  server_id: number | null
   created_by: number | null
   created_at: string
   updated_at: string | null
@@ -52,6 +53,7 @@ export interface DownloadCreatePayload {
   tmdb_rating?: number | null
   resolution: DownloadResolution
   vpn_client_id?: number | null
+  server_id?: number | null
   // Dizi indirmesi icin ek alanlar – sadece category_type='series' oldugunda gonderilir
   series_id?: number | null
   season_id?: number | null

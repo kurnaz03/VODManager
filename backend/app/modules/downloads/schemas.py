@@ -24,6 +24,7 @@ class DownloadBasePayload(BaseModel):
     tmdb_rating: float | None = Field(default=None, ge=0, le=10)
     resolution: DownloadResolutionLiteral = "auto"
     vpn_client_id: int | None = Field(default=None, ge=1)
+    server_id: int | None = Field(default=None, ge=1)
     # Dizi indirmesi icin ek alanlar – sadece category_type='series' oldugunda kullanilir
     series_id: int | None = Field(default=None, ge=1)
     season_id: int | None = Field(default=None, ge=1)
@@ -72,6 +73,7 @@ class DownloadResponse(BaseModel):
     eta_seconds: int | None
     error_message: str | None
     vpn_client_id: int | None
+    server_id: int | None
     # Dizi indirmesine ait ek alanlar
     series_id: int | None
     season_id: int | None

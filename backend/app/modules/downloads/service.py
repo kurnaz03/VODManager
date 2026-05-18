@@ -43,7 +43,7 @@ def _set_setting(db: Session, key: str, value: str | None) -> None:
 
 
 def _get_download_query(db: Session):
-    return db.query(DownloadQueue).options(joinedload(DownloadQueue.category))
+    return db.query(DownloadQueue).options(joinedload(DownloadQueue.category), joinedload(DownloadQueue.server))
 
 
 def _get_download(db: Session, download_id: int) -> DownloadQueue:
@@ -79,6 +79,7 @@ def _serialize_download(item: DownloadQueue) -> dict:
         "eta_seconds": item.eta_seconds,
         "error_message": item.error_message,
         "vpn_client_id": item.vpn_client_id,
+        "server_id": item.server_id,
         # Dizi indirmesi alanlari
         "series_id": item.series_id,
         "season_id": item.season_id,
@@ -157,6 +158,7 @@ def create_download(db: Session, payload: DownloadCreate, created_by: int | None
         file_number=_get_next_file_number(db),
         status=DownloadStatus.queued,
         vpn_client_id=payload.vpn_client_id,
+        server_id=payload.server_id,
         # Dizi alanlari – sadece category_type='series' oldugunda dolu gelir
         series_id=payload.series_id if payload.category_type == "series" else None,
         season_id=payload.season_id if payload.category_type == "series" else None,
@@ -639,6 +641,7 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
                 source_url=item.url,
                 is_public=True,
                 download_queue_id=item.id,
+                server_id=item.server_id,
             )
             db.add(movie)
             db.commit()
@@ -671,6 +674,13 @@ def _finalize_completed_download(db: Session, item: DownloadQueue) -> None:
             )
             db.add(episode)
         db.commit()
+
+        # Dizinin server_id'sini guncelle (tum bolumler ayni sunucuda varsayimi)
+        series = db.query(SeriesContent).filter(SeriesContent.id == item.series_id).first()
+        if series and item.server_id:
+            series.server_id = item.server_id
+            db.add(series)
+            db.commit()
 
 
 def process_download(download_id: int) -> None:

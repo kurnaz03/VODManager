@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { contentApi, Category, seriesApi, SeriesContent, Season } from '../../content/services/contentApi'
 import { DownloadCreatePayload, DownloadItem, DownloadResolution, TmdbMovie, downloadsApi } from '../services/downloadsApi'
 import { vpnApi, VpnClient } from '../../vpn/services/vpnApi'
+import { serversApi, Server as ServerModel } from '../../servers/services/serversApi'
 
 // Form degerlerinin tipi – hem film hem dizi modunu kapsar
 interface DownloadFormValues {
@@ -14,6 +15,7 @@ interface DownloadFormValues {
   resolution: DownloadResolution
   use_vpn: boolean
   vpn_client_id: number
+  server_id: number
   // Dizi modu icin ek alanlar
   series_id: number
   season_id: number
@@ -88,6 +90,7 @@ export default function DownloadsPage() {
       resolution: '1080',
       use_vpn: false,
       vpn_client_id: 0,
+      server_id: 0,
       series_id: 0,
       season_id: 0,
       episode_number: 1,
@@ -113,6 +116,7 @@ export default function DownloadsPage() {
       resolution: '1080',
       use_vpn: false,
       vpn_client_id: 0,
+      server_id: 0,
       series_id: 0,
       season_id: 0,
       episode_number: 1,
@@ -136,6 +140,11 @@ export default function DownloadsPage() {
   const vpnClientsQuery = useQuery({
     queryKey: ['vpn-clients'],
     queryFn: vpnApi.listClients,
+  })
+
+  const serversQuery = useQuery({
+    queryKey: ['servers'],
+    queryFn: () => serversApi.list(),
   })
 
   // Dizi listesi – sadece dizi modu aktifken yukle
@@ -183,7 +192,7 @@ export default function DownloadsPage() {
     mutationFn: (payload: DownloadCreatePayload) => downloadsApi.createDownload(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downloads'] })
-      reset({ url: '', title: '', category_id: 0, resolution: '1080', use_vpn: false, vpn_client_id: 0, series_id: 0, season_id: 0, episode_number: 1 })
+      reset({ url: '', title: '', category_id: 0, resolution: '1080', use_vpn: false, vpn_client_id: 0, server_id: 0, series_id: 0, season_id: 0, episode_number: 1 })
       setSelectedTmdb(null)
       setDropdownOpen(false)
     },
@@ -228,6 +237,7 @@ export default function DownloadsPage() {
       category_id: categoryType === 'movies' ? Number(values.category_id) : null,
       resolution: isYoutube ? values.resolution : 'auto' as DownloadResolution,
       vpn_client_id: values.use_vpn && values.vpn_client_id ? Number(values.vpn_client_id) : null,
+      server_id: values.server_id ? Number(values.server_id) : null,
     }
 
     if (categoryType === 'series') {
@@ -269,6 +279,7 @@ export default function DownloadsPage() {
   const activeVpnClients = (vpnClientsQuery.data ?? []).filter((c: VpnClient) => c.is_active)
   const seriesList: SeriesContent[] = seriesListQuery.data ?? []
   const seasonsList: Season[] = seasonsQuery.data ?? []
+  const serversList: ServerModel[] = serversQuery.data ?? []
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -497,6 +508,18 @@ export default function DownloadsPage() {
                 </select>
               </div>
               )}
+
+              <div>
+                <label className="panel-label">Sunucu</label>
+                <select className="panel-select" {...register('server_id', { valueAsNumber: true })}>
+                  <option value={0}>Main Server (varsayilan)</option>
+                  {serversList.map((s: ServerModel) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.ip_address})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {isYoutube && (
                 <div>

@@ -184,6 +184,8 @@ export interface MovieContent {
   file_size_bytes: number | null
   source_url: string | null
   is_public: boolean
+  server_id: number | null
+  server_name: string | null
   created_at: string
   updated_at: string
 }
@@ -194,6 +196,7 @@ export interface MovieContentUpdate {
   category_id?: number | null
   poster_url?: string | null
   is_public?: boolean
+  server_id?: number | null
 }
 
 export const moviesApi = {
@@ -228,6 +231,8 @@ export interface SeriesContent {
   broadcast_day: string | null
   broadcast_channel: string | null
   channel_logo_url: string | null
+  server_id: number | null
+  server_name: string | null
   created_at: string
   updated_at: string
 }
@@ -244,6 +249,7 @@ export interface SeriesContentCreate {
   broadcast_day?: string | null
   broadcast_channel?: string | null
   channel_logo_url?: string | null
+  server_id?: number | null
 }
 
 export interface Season {

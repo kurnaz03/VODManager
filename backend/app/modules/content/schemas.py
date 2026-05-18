@@ -141,6 +141,7 @@ class MovieContentCreate(BaseModel):
     file_path: str | None = None
     source_url: str | None = None
     is_public: bool = True
+    server_id: int | None = None
 
 
 class MovieContentUpdate(BaseModel):
@@ -149,6 +150,7 @@ class MovieContentUpdate(BaseModel):
     category_id: int | None = None
     poster_url: str | None = None
     is_public: bool | None = None
+    server_id: int | None = None
 
 
 class MovieContentResponse(BaseModel):
@@ -168,6 +170,8 @@ class MovieContentResponse(BaseModel):
     file_size_bytes: int | None
     source_url: str | None
     is_public: bool
+    server_id: int | None
+    server_name: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -189,6 +193,7 @@ class SeriesContentCreate(BaseModel):
     broadcast_day: str | None = None
     broadcast_channel: str | None = None
     channel_logo_url: str | None = None
+    server_id: int | None = None
 
 
 class SeriesContentUpdate(BaseModel):
@@ -199,6 +204,7 @@ class SeriesContentUpdate(BaseModel):
     broadcast_day: str | None = None
     broadcast_channel: str | None = None
     channel_logo_url: str | None = None
+    server_id: int | None = None
 
 
 class SeriesContentResponse(BaseModel):
@@ -216,6 +222,8 @@ class SeriesContentResponse(BaseModel):
     broadcast_day: str | None
     broadcast_channel: str | None
     channel_logo_url: str | None
+    server_id: int | None
+    server_name: str | None
     created_at: datetime
     updated_at: datetime
 

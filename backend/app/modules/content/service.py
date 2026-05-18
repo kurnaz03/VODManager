@@ -473,13 +473,15 @@ def _serialize_movie_content(item: MovieContent) -> dict[str, Any]:
         "file_size_bytes": item.file_size_bytes,
         "source_url": item.source_url,
         "is_public": item.is_public,
+        "server_id": item.server_id,
+        "server_name": item.server.name if item.server else None,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
 
 
 def list_movie_contents(db: Session, category_id: int | None = None) -> list[dict[str, Any]]:
-    query = db.query(MovieContent).options(joinedload(MovieContent.category)).order_by(MovieContent.created_at.desc())
+    query = db.query(MovieContent).options(joinedload(MovieContent.category), joinedload(MovieContent.server)).order_by(MovieContent.created_at.desc())
     if category_id is not None:
         query = query.filter(MovieContent.category_id == category_id)
     return [_serialize_movie_content(item) for item in query.all()]
@@ -490,7 +492,7 @@ def create_movie_content(db: Session, payload: MovieContentCreate) -> dict[str, 
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _serialize_movie_content(db.query(MovieContent).options(joinedload(MovieContent.category)).filter(MovieContent.id == item.id).first())
+    return _serialize_movie_content(db.query(MovieContent).options(joinedload(MovieContent.category), joinedload(MovieContent.server)).filter(MovieContent.id == item.id).first())
 
 
 def update_movie_content(db: Session, movie_id: int, payload: MovieContentUpdate) -> dict[str, Any]:
@@ -503,7 +505,7 @@ def update_movie_content(db: Session, movie_id: int, payload: MovieContentUpdate
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _serialize_movie_content(db.query(MovieContent).options(joinedload(MovieContent.category)).filter(MovieContent.id == item.id).first())
+    return _serialize_movie_content(db.query(MovieContent).options(joinedload(MovieContent.category), joinedload(MovieContent.server)).filter(MovieContent.id == item.id).first())
 
 
 def delete_movie_content(db: Session, movie_id: int) -> None:
@@ -532,6 +534,8 @@ def _serialize_series(item: SeriesContent) -> dict[str, Any]:
         "broadcast_day": item.broadcast_day,
         "broadcast_channel": item.broadcast_channel,
         "channel_logo_url": item.channel_logo_url,
+        "server_id": item.server_id,
+        "server_name": item.server.name if item.server else None,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
@@ -566,7 +570,7 @@ def _serialize_episode(ep: SeriesEpisode) -> dict[str, Any]:
 def list_series(db: Session, category_id: int | None = None) -> list[dict[str, Any]]:
     query = (
         db.query(SeriesContent)
-        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons))
+        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons), joinedload(SeriesContent.server))
         .order_by(SeriesContent.created_at.desc())
     )
     if category_id is not None:
@@ -577,7 +581,7 @@ def list_series(db: Session, category_id: int | None = None) -> list[dict[str, A
 def list_series_by_broadcast_day(db: Session, day_name: str) -> list[dict[str, Any]]:
     items = (
         db.query(SeriesContent)
-        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons))
+        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons), joinedload(SeriesContent.server))
         .filter(SeriesContent.broadcast_day == day_name)
         .order_by(SeriesContent.title.asc())
         .all()
@@ -592,14 +596,14 @@ def create_series(db: Session, payload: SeriesContentCreate) -> dict[str, Any]:
     db.refresh(item)
     return _serialize_series(
         db.query(SeriesContent)
-        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons))
+        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons), joinedload(SeriesContent.server))
         .filter(SeriesContent.id == item.id)
         .first()
     )
 
 
 def update_series(db: Session, series_id: int, payload: SeriesContentUpdate) -> dict[str, Any]:
-    item = db.query(SeriesContent).options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons)).filter(SeriesContent.id == series_id).first()
+    item = db.query(SeriesContent).options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons), joinedload(SeriesContent.server)).filter(SeriesContent.id == series_id).first()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dizi bulunamadi")
     data = payload.model_dump(exclude_unset=True)
@@ -610,7 +614,7 @@ def update_series(db: Session, series_id: int, payload: SeriesContentUpdate) -> 
     db.refresh(item)
     return _serialize_series(
         db.query(SeriesContent)
-        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons))
+        .options(joinedload(SeriesContent.category), joinedload(SeriesContent.seasons), joinedload(SeriesContent.server))
         .filter(SeriesContent.id == series_id)
         .first()
     )
